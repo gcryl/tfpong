@@ -3,7 +3,7 @@ import { useEffect, useRef } from "react";
 import * as tf from '@tensorflow/tfjs';
 import './App.css'
 import { PongActor } from './models/PongActor';
-import { ALEConsole, type ConsoleProps } from './ALEConsole';
+import { ALEConsole } from './ALEConsole';
 
 class Stats {
   played: number = 0;
