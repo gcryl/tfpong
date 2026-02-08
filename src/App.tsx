@@ -1,9 +1,9 @@
-import { useState, type Dispatch, type RefObject, type SetStateAction } from 'react'
+import { useState, type Dispatch, type ReactNode, type RefObject, type SetStateAction } from 'react'
 import { useEffect, useRef } from "react";
 import * as tf from '@tensorflow/tfjs';
 import './App.css'
 import { PongActor } from './models/PongActor';
-import { ALEConsole } from './ALEConsole';
+import { ALEConsole, type ConsoleProps } from './ALEConsole';
 
 class Stats {
   played: number = 0;
@@ -22,15 +22,36 @@ class Stats {
   }
 }
 
+interface ConsoleCardProps {
+  infoText: string;
+  smallInfo?: string;
+  footer?: string;
+  children: ReactNode;
+}
+
+function ConsoleCard({ infoText, smallInfo = "", footer = "", children }: ConsoleCardProps) {
+  return (
+    <div className="card">
+      <div>
+        <p>{infoText}</p>
+        <small>{smallInfo}</small>
+      </div>
+      {children}
+      <div>
+        <p>{footer}</p>
+      </div>
+    </div>
+
+
+  )
+}
+
 function App() {
   const pongActor1Ref = useRef<PongActor>(null);
   const pongActor2Ref = useRef<PongActor>(null);
 
-  const [loadingModel1, setLoadingModel1] = useState(true);
-  const [loadingModel2, setLoadingModel2] = useState(true);
-
-  const [status1, setStatus1] = useState("");
-  const [status2, setStatus2] = useState("");
+  const [status1, setStatus1] = useState("loading model");
+  const [status2, setStatus2] = useState("loading model");
 
   const statsRef1 = useRef(new Stats());
   const statsRef2 = useRef(new Stats());
@@ -38,11 +59,11 @@ function App() {
   useEffect(() => {
     async function fetchModels() {
       pongActor1Ref.current = await PongActor.fromURL("/models/fs4-rp025.json")
-      setLoadingModel1(false);
+      setStatus1("");
       await pongActor1Ref.current.model.save('indexeddb://temp-model');
       const clonedModel = await tf.loadLayersModel('indexeddb://temp-model');
       pongActor2Ref.current = new PongActor(clonedModel);
-      setLoadingModel2(false);
+      setStatus2("");
     }
     fetchModels();
   }, []);
@@ -56,43 +77,36 @@ function App() {
 
   function updateStats(s: RefObject<Stats>, statusSetter: Dispatch<SetStateAction<string>>,
     cpu: number, ai: number) {
-    if (ai > cpu)
+    const won = ai > cpu;
+   
+    if (won)
       s.current.won()
     else
       s.current.loose();
-    statusSetter(`${s.current.played} games /  ${s.current.percentWin()} % won`)
+    if (s.current.played==1) 
+       statusSetter( (won? " won" : "lost")+ " the first game")
+    else 
+     statusSetter(`${s.current.played} games /  ${s.current.percentWin().toFixed(1)} % win`)
   }
 
   return (
     <div>
       <h1>AI Pong</h1>
       <p>A Pong-Playing Agent with TensorFlow Js using the Arcade Learning Environment.</p>
-    <div className="container">
-      <div className="card">
-        <div>
-        <p>deterministic</p>
-         <small></small>
-       </div>
-        <ALEConsole chooseAction={(obs) => chooseAction(pongActor1Ref, obs)} 
-          onEndOfGame={(c, a) => { updateStats(statsRef1, setStatus1, c, a) }} />
-        <div>
-        <p>{status1}</p>
-        <p>{loadingModel1 ? "loading model ..." : ""}</p>
-        </div>
+      <div className="container">
+        <ConsoleCard infoText='deterministic'
+          footer={status1}>
+          <ALEConsole chooseAction={(obs) => chooseAction(pongActor1Ref, obs)}
+            onEndOfGame={(c, a) => { updateStats(statsRef1, setStatus1, c, a) }} />
+        </ConsoleCard>
+
+        <ConsoleCard infoText='stochastic' smallInfo='(sticky action)'
+          footer={status2}>
+          <ALEConsole chooseAction={(obs) => chooseAction(pongActor2Ref, obs)}
+            onEndOfGame={(c, a) => { updateStats(statsRef2, setStatus2, c, a) }}
+            repeatActionProbability={0.25} />
+        </ConsoleCard>
       </div>
-      <div className="card">
-        <div>
-        <p>stochastic</p>
-        <small>(sticky action)</small>
-        </div>
-        <ALEConsole chooseAction={(obs) => chooseAction(pongActor2Ref, obs)} repeatActionProbability={0.25}
-          onEndOfGame={(c, a) => { updateStats(statsRef2, setStatus2, c, a) }} />
-        <div>
-        <p>{status2}</p>
-        <p>{loadingModel2 ? "loading model ..." : ""}</p>
-        </div>
-      </div>
-    </div>
       <div>
         <p className="read-the-docs">
           Click <a href="/example.html"> here </a> for ale js demo from
