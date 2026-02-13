@@ -1,0 +1,26 @@
+
+.container  {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: auto auto auto;
+  gap: 20px;
+}
+
+.card {
+  display: grid;
+  grid-row: span 3;
+  grid-template-rows: subgrid;
+}
+
+.button-grid {
+  display: grid;
+  grid-template-rows: repeat(3, auto); /* 3 rows of automatic height */
+  row-gap: 12px;                        /* space between buttons */
+  width: 200px;                          /* optional width */
+}
+
+.button-grid button {
+  padding: 10px;
+  font-size: 16px;
+  cursor: pointer;
+}
