@@ -48,19 +48,21 @@ function ConsoleCard({ infoText, smallInfo = "", footer = "", children }: Consol
 function App() {
   const pongActor1Ref = useRef<PongActor>(null);
   const pongActor2Ref = useRef<PongActor>(null);
-  
+
   const [status1, setStatus1] = useState("loading model");
   const [status2, setStatus2] = useState("loading model");
 
   const statsRef1 = useRef(new Stats());
   const statsRef2 = useRef(new Stats());
 
+  const [tzVisible, setTzVisible] = useState(false);
+
   useEffect(() => {
     async function fetchModels() {
       pongActor1Ref.current = await PongActor.fromURL("/models/fs4-rp025.json")
       setStatus1("");
       await pongActor1Ref.current.model.save('indexeddb://temp-model');
-      const clonedModel = await tf.loadLayersModel('indexeddb://temp-model');     
+      const clonedModel = await tf.loadLayersModel('indexeddb://temp-model');
       pongActor2Ref.current = new PongActor(clonedModel);
       setStatus2("");
     }
@@ -81,23 +83,26 @@ function App() {
       s.current.won()
     else
       s.current.loose();
-    if (s.current.played==1) 
-       statusSetter( (won? " won" : "lost")+ " the first game")
-    else 
-     statusSetter(`${s.current.played} games /  ${s.current.percentWin().toFixed(1)} % win`)
+    if (s.current.played == 1)
+      statusSetter((won ? " won" : "lost") + " the first game")
+    else
+      statusSetter(`${s.current.played} games /  ${s.current.percentWin().toFixed(1)} % win`)
   }
 
   return (
     <div>
       <h1>AI Pong</h1>
       <p>A Pong-Playing Agent with TensorFlow Js using the Arcade Learning Environment.</p>
+      <p>
+        Here are two neural networks running live in the browser that have learned to play Pong autonomously using only screen input and reward signals.
+        The left agent was trained and operates in a deterministic environment, while the right agent was trained and plays with sticky actions, where the previous action is repeated with a probability of 0.25.  </p>
+
       <div className="container">
         <ConsoleCard infoText='deterministic'
           footer={status1}>
           <ALEConsole chooseAction={(obs) => chooseAction(pongActor1Ref, obs)}
             onEndOfGame={(c, a) => { updateStats(statsRef1, setStatus1, c, a) }} />
         </ConsoleCard>
-
         <ConsoleCard infoText='stochastic' smallInfo='(sticky action)'
           footer={status2}>
           <ALEConsole chooseAction={(obs) => chooseAction(pongActor2Ref, obs)}
@@ -105,16 +110,15 @@ function App() {
             repeatActionProbability={0.25} />
         </ConsoleCard>
       </div>
+      <div><p><small>click on console canvas to pause/start game</small></p></div>
+
       <div>
-        <TrainerPlan/>
+        <p>Training Zone <button onClick={() => setTzVisible(!tzVisible)}>(hide/show)</button></p>
+        <p>Training is quite fast, around 30 minutes to win a game on a macbook Air (16g RAM)</p>
+        <p>Warning: The training process is resource-intensive and may cause temporary browser freezes.</p>
+        {tzVisible && <TrainerPlan />}
       </div>
-      <div>
-        <p className="read-the-docs">
-          Click <a href="/example.html"> here </a> for ale js demo from
-          <a href="https://github.com/Farama-Foundation/Arcade-Learning-Environment"> Arcade-Learning-Environment.
-          </a>
-        </p>
-      </div>
+
     </div>
   )
 }

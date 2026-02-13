@@ -5,6 +5,7 @@ import { ALEConsole } from "./ALEConsole";
 import { PongActor } from "./models/PongActor";
 import * as tf from '@tensorflow/tfjs';
 import { ScoreChart } from "./components/ScoreChart";
+import './TrainerPlan.css';
 
 const TRAIN_DB_URL = "indexeddb://train"
 const REPEAT_ACTION_PROBABILITY = 0.25
@@ -14,8 +15,6 @@ function TrainerPlan() {
     const [modelSaved, setModelSaved] = useState(false);
     const [stickyAction, setStickyAction] = useState(false);
     const [statusText, setStatusText] = useState("");
-
-
     const pongTrainActorRef = useRef<PongActor>(null);
     const scoresRef = useRef<number[]>([]);
     const [scores, setScores] = useState<number[]>([]);
@@ -55,7 +54,7 @@ function TrainerPlan() {
                     addScore(m.data.episodeStats.score);
                 }
                 if (m.data.modelSavePath) {
-                    loadFromStorage (m.data.modelSavePath!).then ( () =>setModelSaved(true));
+                    loadFromStorage(m.data.modelSavePath!).then(() => setModelSaved(true));
                 }
                 if (m.data.trainingDone) {
                     setWorkerStarted(false)
@@ -90,7 +89,7 @@ function TrainerPlan() {
             const isAModelSaved = TRAIN_DB_URL in models;
             setModelSaved(isAModelSaved);
             if (isAModelSaved) {
-               await loadFromStorage (TRAIN_DB_URL);
+                await loadFromStorage(TRAIN_DB_URL);
             }
         })();
     }, [])
@@ -102,28 +101,33 @@ function TrainerPlan() {
     }
 
     return (
-        <div>
-            <p>Train</p>
-            <button onClick={() => train(false)} disabled={workerStarted}>
-                {workerStarted ? "train started" : "train from scratch"}
-            </button>
-            <button onClick={() => train(true)} disabled={workerStarted || !modelSaved}>
-                {workerStarted ? "retrain started" : "retrain"}
-            </button>
-            <button onClick={() => stopTrain()} disabled={!workerStarted}>
-                stop training
-            </button>
-            <ALEConsole running={false} chooseAction={(obs) => chooseAction(obs)}
-                repeatActionProbability={stickyAction ? REPEAT_ACTION_PROBABILITY : 0} />
-            <input type="checkbox" disabled={workerStarted} checked={stickyAction}
-                onChange={(e) => {
-                    setStickyAction(e.target.checked)
-                }
-                }
-            ></input>Sticky Action
+        <div className="container">
+            <div className="card">
+                <div className="button-grid">
+                    <button onClick={() => train(false)} disabled={workerStarted}>
+                        {workerStarted ? "train started" : "train from scratch"}
+                    </button>
+                    <button onClick={() => train(true)} disabled={workerStarted || !modelSaved}>
+                        {workerStarted ? "retrain started" : "retrain"}
+                    </button>
+                    <button onClick={() => stopTrain()} disabled={!workerStarted}>
+                        stop training
+                    </button>
+                </div>
+            </div>
+            <div className="card">
+                <ALEConsole running={false} chooseAction={(obs) => chooseAction(obs)}
+                    repeatActionProbability={stickyAction ? REPEAT_ACTION_PROBABILITY : 0} />
+                <input type="checkbox" disabled={workerStarted} checked={stickyAction}
+                    onChange={(e) => {
+                        setStickyAction(e.target.checked)
+                    }
+                    }
+                ></input>Sticky Action
+            </div>
             <div>
                 <p>Training score history </p>
-                <ScoreChart width={400} height={150} data={scores} title="(ai score) - (cpu score)" />
+                <ScoreChart width={200} height={250} data={scores} title="(ai score) - (cpu score)" />
             </div>
             <p>{statusText}</p>
         </div>
