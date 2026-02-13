@@ -5,10 +5,8 @@ import commonjs from 'vite-plugin-commonjs';
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react(),  commonjs()],
-  optimizeDeps: {
-    exclude: [
-      'lib-js/ale.js'
-    ]
+  worker: {
+    plugins: () => [commonjs()],
   }
 })
 

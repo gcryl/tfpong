@@ -1,0 +1,10 @@
+.solid{
+   opacity: 1;
+   stroke: "#9a6fb0";
+   stroke-width: 2;
+}
+
+.dashed{
+   opacity: 0.2;
+   stroke-dasharray: 5,5; 
+}

@@ -4,6 +4,7 @@ import * as tf from '@tensorflow/tfjs';
 import './App.css'
 import { PongActor } from './models/PongActor';
 import { ALEConsole } from './ALEConsole';
+import TrainerPlan from './TrainerPlan';
 
 class Stats {
   played: number = 0;
@@ -41,15 +42,13 @@ function ConsoleCard({ infoText, smallInfo = "", footer = "", children }: Consol
         <p>{footer}</p>
       </div>
     </div>
-
-
   )
 }
 
 function App() {
   const pongActor1Ref = useRef<PongActor>(null);
   const pongActor2Ref = useRef<PongActor>(null);
-
+  
   const [status1, setStatus1] = useState("loading model");
   const [status2, setStatus2] = useState("loading model");
 
@@ -61,7 +60,7 @@ function App() {
       pongActor1Ref.current = await PongActor.fromURL("/models/fs4-rp025.json")
       setStatus1("");
       await pongActor1Ref.current.model.save('indexeddb://temp-model');
-      const clonedModel = await tf.loadLayersModel('indexeddb://temp-model');
+      const clonedModel = await tf.loadLayersModel('indexeddb://temp-model');     
       pongActor2Ref.current = new PongActor(clonedModel);
       setStatus2("");
     }
@@ -78,7 +77,6 @@ function App() {
   function updateStats(s: RefObject<Stats>, statusSetter: Dispatch<SetStateAction<string>>,
     cpu: number, ai: number) {
     const won = ai > cpu;
-   
     if (won)
       s.current.won()
     else
@@ -106,6 +104,9 @@ function App() {
             onEndOfGame={(c, a) => { updateStats(statsRef2, setStatus2, c, a) }}
             repeatActionProbability={0.25} />
         </ConsoleCard>
+      </div>
+      <div>
+        <TrainerPlan/>
       </div>
       <div>
         <p className="read-the-docs">
