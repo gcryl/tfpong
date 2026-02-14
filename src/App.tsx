@@ -114,7 +114,7 @@ function App() {
 
       <div>
         <p>Training Zone <button onClick={() => setTzVisible(!tzVisible)}>(hide/show)</button></p>
-        <p>Training is quite fast, around 30 minutes to win a game on a macbook Air (16g RAM)</p>
+        <p>Training is quite fast, around 30 minutes to win a game on a macbook Air M1 (16g RAM)</p>
         <p>Warning: The training process is resource-intensive and may cause temporary browser freezes.</p>
         {tzVisible && <TrainerPlan />}
       </div>
