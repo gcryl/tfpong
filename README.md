@@ -5,7 +5,7 @@ Machine Learning powered by TensorFlow.js
 
 Atari 2600 emulation via WebAssembly using the Arcade Learning Environment (ALE)
 
-This application trains a Convolutional Neural Network (CNN) in-browser to learn how to play Pong autonomously. On a MacBook Air M1 (16GB RAM) with google chrome, the agent typically learns to outperform a basic opponent in under 1 hour.
+This application trains a Convolutional Neural Network (CNN) in-browser to learn how to play Pong autonomously. On a MacBook Air M1 (16GB RAM) with google chrome, the agent typically learns to outperform the built-in atari opponent in under 1 hour.
 
 The training algorithm is Proximal Policy Optimization (PPO).
 

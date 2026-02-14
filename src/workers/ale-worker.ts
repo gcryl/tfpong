@@ -17,6 +17,7 @@ export interface ALEOrder {
     resetEnv? : boolean
     actionToPlay? : number
     loadROMParams? : LoadRomParams
+    contextRoot?  : string
 }
 export interface LoadRomParams {
     romPath : string
@@ -32,15 +33,18 @@ export class WorkerJob {
 
     private aleEnv? : ALEInterface;
     private envId : number;
+    private contextRoot : string;
     
-    constructor (envId : number) {
+    constructor (envId : number, contextRoot : string) {
          this.envId = envId;
+         this.contextRoot = contextRoot;
     }
     
     async loadROM (romPath="/roms/pong.bin",frameSkip = 4, repeatActionProbability=0.){
+        const contextRoot = this.contextRoot;
         // without override, download failed  (relative url to woker)
         function locateFile(path :any, prefix : any) {
-            if (path.endsWith(".data") || path.endsWith(".wasm")) return "/" + path
+            if (path.endsWith(".data") || path.endsWith(".wasm")) return  contextRoot+ path
             return prefix + path
         }
         const ALE = await createALEModule({'locateFile' : locateFile});
@@ -84,7 +88,7 @@ let job : WorkerJob ;
 
 onmessage = async function (event : MessageEvent<ALEOrder>) {
     if (event.data.loadROM) {
-        job = new WorkerJob(event.data.envId);
+        job = new WorkerJob(event.data.envId, event.data.contextRoot!);
         if (event.data.loadROMParams)
             await job.loadROM(event.data.loadROMParams.romPath, 
                     event.data.loadROMParams.frameSkip,

@@ -28,24 +28,26 @@ let ppoTrainer: PPOTrainer;
 let workerOrchestrator : WorkerOrchestrator;
 
 onmessage = function (event: MessageEvent<TrainArgsPayload>) {
+  const contextRoot = import.meta.env.BASE_URL;
+
   if (event.data.stopTrain) {
     if (workerOrchestrator)
       workerOrchestrator.stopTrain();
   } else {
     tf.enableProdMode();
     tf.ready().then(() => {
-      train(event.data);
+      train(event.data, contextRoot);
     })
   }
 
 };
 
-async function train(params: TrainArgsPayload) {
+async function train(params: TrainArgsPayload, contextRoot : string) {
   const TRAIN_PARAMS= new TrainParams(params.epochs,  params.repeatActionProbability)
      
   if (ppoTrainer == null) {
      ppoTrainer = new PPOTrainer(TRAIN_PARAMS.learningRate);
-     workerOrchestrator = new WorkerOrchestrator(ppoTrainer);
+     workerOrchestrator = new WorkerOrchestrator(ppoTrainer, contextRoot);
   }
     
   const skipUpdateModel = 5;
