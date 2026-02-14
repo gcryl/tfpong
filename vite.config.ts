@@ -6,6 +6,7 @@ import commonjs from 'vite-plugin-commonjs';
 export default defineConfig({
   plugins: [react(),  commonjs()],
   base: '/tfpong/', // IMPORTANT
+  build: { outDir: "./docs"},
   worker: {
     plugins: () => [commonjs()],
   }
