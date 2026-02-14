@@ -59,7 +59,7 @@ function App() {
 
   useEffect(() => {
     async function fetchModels() {
-      pongActor1Ref.current = await PongActor.fromURL("/models/fs4-rp025.json")
+      pongActor1Ref.current = await PongActor.fromURL("models/fs4-rp025.json")
       setStatus1("");
       await pongActor1Ref.current.model.save('indexeddb://temp-model');
       const clonedModel = await tf.loadLayersModel('indexeddb://temp-model');
