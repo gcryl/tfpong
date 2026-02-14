@@ -42,9 +42,11 @@ export class WorkerOrchestrator {
   onStatusTextUpdate?: OnStatusTextUpdate;
 
   private eStartTime: number = 0;
+  private contextRoot : string;
 
-  constructor(ppoTrainer: PPOTrainer) {
+  constructor(ppoTrainer: PPOTrainer, contextRoot : string) {
     this.ppoTrainer = ppoTrainer;
+    this.contextRoot = contextRoot;
   }
 
   startEnvWorker() {
@@ -75,7 +77,8 @@ export class WorkerOrchestrator {
           romPath: this.trainParams.romPath,
           repeatActionProbability: this.trainParams.repeatActionProbability,
           frameSkip: 4
-        }
+        },
+        "contextRoot" : this.contextRoot
       })
     }
   }
