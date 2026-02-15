@@ -55,19 +55,15 @@ export class WorkerJob {
         ale.setFloat("repeat_action_probability", repeatActionProbability);
         ale.setInt ("random_seed", this.envId)
         ale.loadROM(romPath)
-        postMessage({"envId" : this.envId, "ROMLoaded" : true})
     }
 
-    resetEpisode (w :DedicatedWorkerGlobalScope) : Uint8Array{
+    resetEpisode () : Uint8Array{
         this.aleEnv!.resetGame()
         const o = preprocess(this.aleEnv!.getScreenGrayscale());
-
-        const m = {"envId" : this.envId, "observation" : o}
-        w.postMessage(m,  [o.buffer])
         return o;
     }
 
-    playAction (w :DedicatedWorkerGlobalScope, action : number) : EnvState {
+    playAction (action : number) : EnvState {
         const reward = this.aleEnv!.act(action);
         const ram = this.aleEnv!.getRAM();
         const cpuScore = ram[13];
@@ -78,15 +74,22 @@ export class WorkerJob {
                     observation: observation,
                     done: done,
                     reward : reward}
-        const m = ({"envId" : this.envId, "state" : stepResult})
-        w.postMessage(m,  [stepResult.observation.buffer])
         return stepResult;
     }
 } 
 
 let job : WorkerJob ;
 
+interface Answer {
+  envId: number;
+  payload? :  boolean | EnvState| Uint8Array;
+  
+}
+
 onmessage = async function (event : MessageEvent<ALEOrder>) {
+    let answer  : Answer = {"envId" : event.data.envId};
+    let observation : Uint8Array|undefined = undefined;
+    
     if (event.data.loadROM) {
         job = new WorkerJob(event.data.envId, event.data.contextRoot!);
         if (event.data.loadROMParams)
@@ -95,13 +98,23 @@ onmessage = async function (event : MessageEvent<ALEOrder>) {
                     event.data.loadROMParams.repeatActionProbability);
         else 
             await job.loadROM();   
+        answer.payload = true ;
     } else if (event.data.resetEnv) {
-        job.resetEpisode(self as DedicatedWorkerGlobalScope );
+        observation =  job.resetEpisode();
+        answer.payload = observation;
     } else if (event.data.actionToPlay != undefined) {
-        job.playAction (self as DedicatedWorkerGlobalScope , event.data.actionToPlay)
+        const stepResult = job.playAction (event.data.actionToPlay)
+        answer.payload = stepResult;
+        observation = stepResult.observation
     }else {
-        console.log("Bad order " + event)
+        console.log("Bad order " + event);
     }
+    if (observation) 
+        // buffer as parameter = transferable optimisation
+        event.ports[0].postMessage(answer, [observation.buffer]); 
+    else 
+        event.ports[0].postMessage(answer);
+
 };
 
 
