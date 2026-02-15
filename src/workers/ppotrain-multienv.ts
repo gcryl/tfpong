@@ -255,6 +255,10 @@ export class PPOTrainer {
     return this.eDones.reduce((acc, v) => acc && v, true);
   }
 
+  countEnvsRunning() {
+    return this.eDones.reduce((acc, v) => v? acc: acc +=1, 0);
+  }
+
   startEpisode() {
     for (let index = 0; index < this.ENV_COUNT; index++) {
       this.envTrainData[index].clear();
@@ -264,11 +268,11 @@ export class PPOTrainer {
   }
 
 
-  resetEnv(envId: number, o: Uint8Array) {
+  onResetEnv(envId: number, o: Uint8Array) {
     this.envObservations [envId] = new StackedObservations(o);
   }
 
-  async onStateEnv(envId: number, s: EnvState) {
+  onStateEnv(envId: number, s: EnvState) {
     this.envTrainData[envId].pushReward(s.reward);
     this.rewardSums += s.reward;
     this.eDones[envId] = s.done;

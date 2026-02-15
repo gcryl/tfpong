@@ -26,12 +26,10 @@ export class TrainParams {
   }
 }
 
-
 export class WorkerOrchestrator {
   readonly ENV_COUNT = 16;
 
   private envWorkers: Worker[] = [];
-  private waitWorkerCounter: number = 0;
   private running: boolean = false;
   private ppoTrainer: PPOTrainer;
   private episodeNumber: number = 0;
@@ -42,115 +40,71 @@ export class WorkerOrchestrator {
   onStatusTextUpdate?: OnStatusTextUpdate;
 
   private eStartTime: number = 0;
-  private contextRoot : string;
+  private contextRoot: string;
 
-  constructor(ppoTrainer: PPOTrainer, contextRoot : string) {
+  constructor(ppoTrainer: PPOTrainer, contextRoot: string) {
     this.ppoTrainer = ppoTrainer;
     this.contextRoot = contextRoot;
   }
 
-  startEnvWorker() {
-    function bindAleWorkerEvent(w: Worker, me: WorkerOrchestrator) {
-      w.onmessage = function (event) {
-        if (event.data.ROMLoaded) {
-          me.onROMLoaded(this, event.data.envId);
-        } else if (event.data.observation) {
-          me.onReset(this, event.data.envId, event.data.observation);
-        } else if (event.data.state) {
-          me.onState(this, event.data.envId, event.data.state);
-        }
-      }
+  async startEnvWorker() {
+    const workerToStartCount = this.ENV_COUNT - this.envWorkers.length;
+    if (workerToStartCount == 0) {
+      return new Promise<void>((res, _) => res());
     }
-    this.waitWorkerCounter = this.ENV_COUNT - this.envWorkers.length;
-    if (this.waitWorkerCounter == 0) {
-      this.startEpisode();
-      return;
-    }
-    this.updateStatusText(`Starting ${this.waitWorkerCounter} ALE env, wait ...`);
+    this.updateStatusText(`Starting ${workerToStartCount} ALE env, wait ...`);
+
+    const loadedPromises: Promise<void>[] = [];
     for (let i = this.envWorkers.length; i < this.ENV_COUNT; i++) {
       const w = new aleWorker();
-      bindAleWorkerEvent(w, this);
       this.envWorkers.push(w);
-      w.postMessage({
-        "envId": i, "loadROM": true,
-        "loadROMParams": {
-          romPath: this.trainParams.romPath,
-          repeatActionProbability: this.trainParams.repeatActionProbability,
-          frameSkip: 4
-        },
-        "contextRoot" : this.contextRoot
-      })
+      loadedPromises.push(new Promise((resolve, _) => {
+        const romLoadedChannel = new MessageChannel();
+        romLoadedChannel.port1.onmessage = () => resolve();
+        w.postMessage({
+          "envId": i, "loadROM": true,
+          "loadROMParams": {
+            romPath: this.trainParams.romPath,
+            repeatActionProbability: this.trainParams.repeatActionProbability,
+            frameSkip: 4
+          },
+          "contextRoot": this.contextRoot
+        }, [romLoadedChannel.port2])
+
+      }));
     }
+    return Promise.all(loadedPromises)
   }
 
-  private startEpisode() {
-    this.updateStatusText(`Collecting train data ...`);
-    this.ppoTrainer.startEpisode();
-    this.waitWorkerCounter = this.ENV_COUNT;
-    this.eStartTime = Date.now()
-    this.envWorkers.forEach((env, _) => {
-      env.postMessage({ "resetEnv": true })
+
+  private async postWaitResponse<M, A, R>(envId: number, msgToPostBuilder: () => M, reply: (envId: number, a: A) => R) {
+    type withEnv = { envId: number, payload: A };
+
+    const w: Worker = this.envWorkers[envId];
+    const p = new Promise<withEnv>((resolve, _) => {
+      const channel = new MessageChannel();
+      channel.port1.onmessage = (event: MessageEvent<withEnv>) => resolve(event.data);
+      w.postMessage(msgToPostBuilder(), [channel.port2]);
+    });
+    return p.then(r => {
+      return reply(r.envId, r.payload);
     });
   }
 
-  onROMLoaded(_worker: Worker, _: number) {
-    this.waitWorkerCounter -= 1;
-    if (this.waitWorkerCounter == 0) {
-      this.startEpisode()
-    }
-  }
-
-  onReset(_worker: Worker, envId: number, o: Uint8Array) {
-    this.waitWorkerCounter -= 1;
-    this.ppoTrainer.resetEnv(envId, o);
-    if (this.waitWorkerCounter == 0) {
-      setTimeout(() => this.chooseAction());
-    }
-  }
-
-  chooseAction() {
-    const actionByRuningEnv = this.ppoTrainer.chooseAction();
-    this.waitWorkerCounter = actionByRuningEnv.length;
-    actionByRuningEnv.forEach(({ envId, action }, _) => {
-      this.envWorkers[envId].postMessage({ "actionToPlay": action })
+  private postAndWaitForAllEnv<M, A, R>(msgToPostBuilder: (envId: number) => M, reply: (envId: number, a: A) => R) {
+    type withEnv = { envId: number, payload: A };
+    const promises: Promise<R>[] = [];
+    this.envWorkers.forEach((w, envId) => {
+      const p = new Promise<withEnv>((resolve, _) => {
+        const channel = new MessageChannel();
+        channel.port1.onmessage = (event: MessageEvent<withEnv>) => resolve(event.data),
+          w.postMessage(msgToPostBuilder(envId), [channel.port2]);
+      });
+      promises.push(p.then(r => reply(r.envId, r.payload)));
     });
+    return Promise.all(promises);
   }
-
-
-  async onState(_worker: Worker, envId: number, s: EnvState) {
-    this.waitWorkerCounter -= 1;
-    this.ppoTrainer.onStateEnv(envId, s);
-    if (s.done) {
-      this.updateStatusText(`ALE ${envId} episode end, still ${this.waitWorkerCounter} running`);
-    }
-    if (this.waitWorkerCounter == 0) {
-      if (!this.running) {
-        if (this.onEndTraining) this.onEndTraining();
-        this.updateStatusText("Training aborted");
-        return;
-      }
-      if (this.ppoTrainer.areAllEnvsDone()) {
-        this.updateStatusText(`Fitting ... (could freeze UI)`);
-        const curr_lr = this.trainParams.learningRate * ((this.trainParams.epochs - this.episodeNumber) / this.trainParams.epochs)
-
-        const stats = await this.ppoTrainer.fitEnvs(curr_lr);
-        this.updateStatusText("Fitting done");
-        if (this.onEpisodeEnd) {
-          const duration = (Date.now() - this.eStartTime) / this.ENV_COUNT
-          this.onEpisodeEnd(this.ppoTrainer.ppoPong.model, this.episodeNumber, stats.meanReward, duration)
-        }
-
-        this.episodeNumber += 1;
-        if (this.episodeNumber < this.trainParams.epochs)
-          this.startEpisode();
-        else
-          this.updateStatusText(`Training done, ${this.trainParams.epochs} epochs`);
-      } else {
-        this.chooseAction();
-      }
-    }
-  }
-
+ 
   private updateStatusText(statusText: string) {
     if (this.onStatusTextUpdate) this.onStatusTextUpdate(statusText);
   }
@@ -159,7 +113,50 @@ export class WorkerOrchestrator {
     this.running = true;
     if (trainParams)
       this.trainParams = trainParams;
-    this.startEnvWorker();
+    await this.startEnvWorker();
+    while (this.running && this.episodeNumber < this.trainParams.epochs) {
+      this.updateStatusText(`Collecting train data ...`);
+      this.eStartTime = Date.now()
+      this.ppoTrainer.startEpisode();
+      await this.postAndWaitForAllEnv((x) => { return { "envId" : x, "resetEnv": true } },
+         (envId: number, observation: Uint8Array) => this.ppoTrainer.onResetEnv(envId, observation)
+      );
+
+      let runningCount = this.ppoTrainer.countEnvsRunning();
+      while (!this.ppoTrainer.areAllEnvsDone()) {
+        const actionForEachRuningEnv = this.ppoTrainer.chooseAction();
+
+        const envStates = await
+          Promise.all(
+            Array.from(actionForEachRuningEnv.entries(), async ([_, { envId, action}]) => {
+              return this.postWaitResponse(envId, () => { return { "envId" : envId, "actionToPlay": action } },
+                (x: number, state: EnvState) => { this.ppoTrainer.onStateEnv(x, state); return state });
+            })
+          );
+
+        if (envStates.length != runningCount) {
+          runningCount = envStates.length;
+          this.updateStatusText(`Collecting train data ... ${runningCount} envs running`);
+        }
+        if (this.ppoTrainer.areAllEnvsDone()) {
+          this.updateStatusText(`Fitting ... (could freeze UI)`);
+          const curr_lr = this.trainParams.learningRate * ((this.trainParams.epochs - this.episodeNumber) / this.trainParams.epochs)
+          const stats = await this.ppoTrainer.fitEnvs(curr_lr);
+          this.updateStatusText("Fitting done");
+          if (this.onEpisodeEnd) {
+            const duration = (Date.now() - this.eStartTime) / this.ENV_COUNT
+            this.onEpisodeEnd(this.ppoTrainer.ppoPong.model, this.episodeNumber, stats.meanReward, duration)
+          }
+        }
+      }
+      this.episodeNumber += 1;
+    }
+    if (this.episodeNumber == this.trainParams.epochs)
+      this.updateStatusText(`Training done, ${this.trainParams.epochs} epochs`);
+    else
+      this.updateStatusText("Training aborted");
+    if (this.onEndTraining) this.onEndTraining();
+
   }
 
   stopTrain() {
