@@ -104,28 +104,34 @@ function TrainerPlan() {
         <div className="container">
             <div className="card">
                 <div className="button-grid">
-                    <button onClick={() => train(false)} disabled={workerStarted}>
-                        {workerStarted ? "train started" : "train from scratch"}
-                    </button>
-                    <button onClick={() => train(true)} disabled={workerStarted || !modelSaved}>
-                        {workerStarted ? "retrain started" : "retrain"}
-                    </button>
-                    <button onClick={() => stopTrain()} disabled={!workerStarted}>
-                        stop training
-                    </button>
+                    <div>
+                        <button onClick={() => train(false)} disabled={workerStarted}>
+                            {workerStarted ? "train started" : "train from scratch"}
+                        </button>
+                    </div>
+                    <div>
+                        <button onClick={() => train(true)} disabled={workerStarted || !modelSaved}>
+                            {workerStarted ? "retrain started" : "retrain"}
+                        </button>
+                    </div>
+                    <div>
+                        <button onClick={() => stopTrain()} disabled={!workerStarted}>
+                            stop training
+                        </button>
+                    </div>
+                    <p>
+                        <input type="checkbox" disabled={workerStarted} checked={stickyAction}
+                            onChange={(e) => setStickyAction(e.target.checked)}
+                        ></input>Sticky Action
+                    </p>
                 </div>
             </div>
             <div className="card">
                 <ALEConsole running={false} chooseAction={(obs) => chooseAction(obs)}
                     repeatActionProbability={stickyAction ? REPEAT_ACTION_PROBABILITY : 0} />
-                <input type="checkbox" disabled={workerStarted} checked={stickyAction}
-                    onChange={(e) => {
-                        setStickyAction(e.target.checked)
-                    }
-                    }
-                ></input>Sticky Action
+
             </div>
-            <div>
+            <div className="card">
                 <p>Training score history </p>
                 <ScoreChart width={200} height={250} data={scores} title="(ai score) - (cpu score)" />
             </div>

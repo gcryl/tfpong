@@ -18,6 +18,7 @@ export const ALEConsole = ({ chooseAction,
   romPath = "roms/pong.bin", frameSkip = 4, repeatActionProbability = 0.,
   running = true, onEndOfGame, ...divProps }: ConsoleProps) => {
   const aleCanvasId = useId()
+  
   const aleRef = useRef<ALEInterface>(null);
   const endOfGameEmitted = useRef<boolean>(false);
   const runningRef = useRef(running);
@@ -37,6 +38,17 @@ export const ALEConsole = ({ chooseAction,
       return;
     const ale = aleRef.current;
     ale.renderToCanvas(aleCanvasId!);
+    if (!runningRef.current) {
+      const canvas = document.getElementById(aleCanvasId) as HTMLCanvasElement;
+      const ctx = canvas.getContext("2d")!;
+
+      ctx.fillStyle = "white";
+      ctx.font = "bold 10px Arial";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+
+      ctx.fillText("PAUSED", canvas.width / 2, canvas.height / 2);
+      }
     if (!ale.gameOver()) {
       const action = chooseAction(preprocess(ale.getScreenGrayscale()));
       ale.act(action);
@@ -69,9 +81,8 @@ export const ALEConsole = ({ chooseAction,
 
   useEffect(() => {
     if (aleRef.current) {
-        load()
+      load()
     }
-     
   }, [repeatActionProbability])
 
   function toggleRunning() {

@@ -8,10 +8,10 @@ type LineChartProps = {
   width: number;
   height: number;
   data: number[];
-  title? : string;
+  title?: string;
 };
 
-export const ScoreChart = ({ width, height, data, title}: LineChartProps) => {
+export const ScoreChart = ({ width, height, data, title }: LineChartProps) => {
   // bounds = area inside the graph axis = calculated by substracting the margins
   const axesRef = useRef(null);
   const boundsWidth = width - MARGIN.right - MARGIN.left;
@@ -38,7 +38,7 @@ export const ScoreChart = ({ width, height, data, title}: LineChartProps) => {
   useEffect(() => {
     const svgElement = d3.select(axesRef.current);
     svgElement.selectAll("*").remove();
-    const xAxisGenerator = d3.axisBottom(xScale);
+    const xAxisGenerator = d3.axisBottom(xScale).ticks(5);
     svgElement
       .append("g")
       .attr("transform", "translate(0," + boundsHeight + ")")
@@ -62,7 +62,7 @@ export const ScoreChart = ({ width, height, data, title}: LineChartProps) => {
   return (
     <div>
       <svg width={width} height={height}>
-        { title && <title>{title}</title>}
+        {title && <title>{title}</title>}
         <g
           width={boundsWidth}
           height={boundsHeight}
@@ -87,7 +87,7 @@ export const ScoreChart = ({ width, height, data, title}: LineChartProps) => {
             x2={xScale(data.length)}
             y1={yScale(21)}
             y2={yScale(21)}
-  
+
             className="dashed"
           />
         </g>

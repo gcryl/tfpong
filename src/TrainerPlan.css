@@ -16,7 +16,6 @@
   display: grid;
   grid-template-rows: repeat(3, auto); /* 3 rows of automatic height */
   row-gap: 12px;                        /* space between buttons */
-  width: 200px;                          /* optional width */
 }
 
 .button-grid button {
