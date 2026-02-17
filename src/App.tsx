@@ -3,8 +3,9 @@ import { useEffect, useRef } from "react";
 import * as tf from '@tensorflow/tfjs';
 import './App.css'
 import { PongActor } from './models/PongActor';
-import { ALEConsole } from './ALEConsole';
+import { ALEConsole } from './components/ALEConsole';
 import TrainerPlan from './TrainerPlan';
+import { preprocess } from './utils';
 
 class Stats {
   played: number = 0;
@@ -69,9 +70,9 @@ function App() {
     fetchModels();
   }, []);
 
-  function chooseAction(actorRef: RefObject<PongActor | null>, screen: Uint8Array): number {
+  function chooseAction(actorRef: RefObject<PongActor | null>, screen: Uint8ClampedArray): number {
     if (actorRef.current) {
-      return actorRef.current.predict(screen);
+      return actorRef.current.predict(preprocess(screen));
     }
     return 0;
   }

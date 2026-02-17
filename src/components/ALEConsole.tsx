@@ -1,11 +1,11 @@
 import { useEffect, useId, useRef } from "react";
 
-import createALEModule, { type ALEInterface } from '../public/ale';
-import { preprocess } from "./utils";
+import createALEModule, { type ALEInterface } from '../../public/ale';
+
 
 
 interface ConsoleProps extends React.ComponentPropsWithoutRef<"div"> {
-  chooseAction: (screen: Uint8Array) => number;
+  chooseAction: (screen: Uint8ClampedArray) => number;
   romPath?: string;
   frameSkip?: number;
   repeatActionProbability?: number;
@@ -50,7 +50,7 @@ export const ALEConsole = ({ chooseAction,
       ctx.fillText("PAUSED", canvas.width / 2, canvas.height / 2);
       }
     if (!ale.gameOver()) {
-      const action = chooseAction(preprocess(ale.getScreenGrayscale()));
+      const action = chooseAction(ale.getScreenGrayscale());
       ale.act(action);
       if (runningRef.current)
         requestAnimationFrame(() => loop());

@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import MainWorker from './workers/worker?worker';
 import type { WorkerStatusPayload } from "./workers/worker";
-import { ALEConsole } from "./ALEConsole";
+import { ALEConsole } from "./components/ALEConsole";
 import { PongActor } from "./models/PongActor";
 import * as tf from '@tensorflow/tfjs';
 import { ScoreChart } from "./components/ScoreChart";
 import './TrainerPlan.css';
+import { preprocess } from "./utils";
 
 const TRAIN_DB_URL = "indexeddb://train"
 const REPEAT_ACTION_PROBABILITY = 0.25
@@ -76,9 +77,9 @@ function TrainerPlan() {
         }
     }
 
-    function chooseAction(screen: Uint8Array): number {
+    function chooseAction(screen: Uint8ClampedArray): number {
         if (pongTrainActorRef.current) {
-            return pongTrainActorRef.current.predict(screen);
+            return pongTrainActorRef.current.predict(preprocess(screen));
         }
         return 0;
     }
