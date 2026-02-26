@@ -62,7 +62,7 @@ async function train(params: TrainArgsPayload, contextRoot : string) {
       "score": reward_sum,
       "elapsedTimeInMs": elapsedTimeInMs
     };
-    const toSave = episodeNumber % skipUpdateModel == 0;
+    const toSave = (episodeNumber) % skipUpdateModel == 0;
 
     if (toSave) {
       await model.save(params.modelPath)
