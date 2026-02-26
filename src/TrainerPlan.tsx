@@ -16,6 +16,7 @@ const REPEAT_ACTION_PROBABILITY = 0.25
 
 function TrainerPlan() {
     const [workerStarted, setWorkerStarted] = useState(false);
+    const [infoAI, setInfoAI] = useState("");
     const [modelSaved, setModelSaved] = useState(false);
     const [stickyAction, setStickyAction] = useState(false);
     const [statusText, setStatusText] = useState("");
@@ -63,7 +64,10 @@ function TrainerPlan() {
                     addScore(m.data.episodeStats.score);
                 }
                 if (m.data.modelSavePath) {
-                    loadFromStorage(m.data.modelSavePath!).then(() => setModelSaved(true));
+                    loadFromStorage(m.data.modelSavePath!).then(() => {
+                        setInfoAI("Weights updated at epoch "+m.data.episodeStats?.episodeNumber);
+                        setModelSaved(true)
+                    });
                 }
                 if (m.data.trainingDone) {
                     setWorkerStarted(false)
@@ -143,7 +147,7 @@ function TrainerPlan() {
             <div className="card">
                 <ALEConsole running={false} chooseAction={(obs) => chooseAction(obs)}
                     repeatActionProbability={stickyAction ? REPEAT_ACTION_PROBABILITY : 0} />
-
+                 <small>{infoAI}</small>
             </div>
             <div>
                 <div><p>{statusText}</p></div>
