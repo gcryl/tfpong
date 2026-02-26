@@ -2,25 +2,18 @@
 import * as tf from '@tensorflow/tfjs';
 
 
-
-export function predToAction(action_probs: number[]): [number, number] {
-    const yprob = randomChoice(action_probs)
-    let action = 3 // RIGHT
-    if (yprob == 1)
-      action = 4 // LEFT
-    else if (yprob == 2)
-      action = 0 // NOOP
-    return [yprob, action];
+export async function sleep(ms: number) {
+  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-export function diffObs(observation: Uint8Array, prev_obs: Uint8Array): number[] {
-    const diffs: Int8Array = new Int8Array(observation.length);
-    observation.forEach((v, index) => diffs[index] = (v - prev_obs[index]));
-    const cur_x = standardizeInt8Array(diffs)
-
-    const a: number[] = []
-    cur_x.forEach(v => a.push(v))
-    return a
+export function predToAction(action_probs: number[]): [number, number] {
+  const yprob = randomChoice(action_probs)
+  let action = 3 // RIGHT
+  if (yprob == 1)
+    action = 4 // LEFT
+  else if (yprob == 2)
+    action = 0 // NOOP
+  return [yprob, action];
 }
 
 export function standardizeNumberArray(arr: number[]) {
@@ -59,6 +52,9 @@ export function randomChoice(probs: number[]): number {
   return normalized.length - 1;
 }
 
+/*
+* From screen to 80x80x1 bw
+**/
 export function preprocess(screen: Uint8ClampedArray): Uint8Array {
   const FACTOR = 2
   const IMG_SIZE = 160 / FACTOR
@@ -84,38 +80,38 @@ export function preprocess(screen: Uint8ClampedArray): Uint8Array {
 
 
 export async function saveModelToString(model: tf.LayersModel): Promise<string> {
-    let modelString = '';
-    
-    return model.save(
-        tf.io.withSaveHandler(async (artifacts) => {
-            modelString = JSON.stringify({
-                modelTopology: artifacts.modelTopology,
-                weightSpecs: artifacts.weightSpecs,
-                weightData: Array.from(new Uint8Array(artifacts.weightData as ArrayBuffer)),
-            });
-            return {
-                modelArtifactsInfo: {
-                    dateSaved: new Date(),
-                    modelTopologyType: 'JSON',
-                },
-            };
-        }), { includeOptimizer: false }
-    ).then(() => modelString)
+  let modelString = '';
+
+  return model.save(
+    tf.io.withSaveHandler(async (artifacts) => {
+      modelString = JSON.stringify({
+        modelTopology: artifacts.modelTopology,
+        weightSpecs: artifacts.weightSpecs,
+        weightData: Array.from(new Uint8Array(artifacts.weightData as ArrayBuffer)),
+      });
+      return {
+        modelArtifactsInfo: {
+          dateSaved: new Date(),
+          modelTopologyType: 'JSON',
+        },
+      };
+    }), { includeOptimizer: false }
+  ).then(() => modelString)
 }
 
 export async function loadModelFromString(modelString: string): Promise<tf.LayersModel> {
-    const parsed = JSON.parse(modelString) as {
-        modelTopology: any;
-        weightSpecs: tf.io.WeightsManifestEntry[];
-        weightData: number[];
-    };
+  const parsed = JSON.parse(modelString) as {
+    modelTopology: any;
+    weightSpecs: tf.io.WeightsManifestEntry[];
+    weightData: number[];
+  };
 
-    const weightArray = new Uint8Array(parsed.weightData ?? []);
-    const artifacts: tf.io.ModelArtifacts = {
-        modelTopology: parsed.modelTopology,
-        weightSpecs: parsed.weightSpecs,
-        weightData: weightArray.buffer,
-    };
+  const weightArray = new Uint8Array(parsed.weightData ?? []);
+  const artifacts: tf.io.ModelArtifacts = {
+    modelTopology: parsed.modelTopology,
+    weightSpecs: parsed.weightSpecs,
+    weightData: weightArray.buffer,
+  };
 
-    return tf.loadLayersModel(tf.io.fromMemory(artifacts))
+  return tf.loadLayersModel(tf.io.fromMemory(artifacts))
 }

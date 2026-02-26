@@ -2,6 +2,7 @@ import * as tf from '@tensorflow/tfjs';
 import aleWorker from './ale-worker?worker'
 import type { EnvState } from './ale-worker';
 import { PPOTrainer } from './ppotrain-multienv';
+import { sleep } from '../utils';
 
 
 export interface OnEpisodeEnd {
@@ -123,9 +124,8 @@ export class WorkerOrchestrator {
       );
 
       let runningCount = this.ppoTrainer.countEnvsRunning();
-      while (!this.ppoTrainer.areAllEnvsDone()) {
-        const actionForEachRuningEnv = this.ppoTrainer.chooseAction();
-
+      while (!this.ppoTrainer.areAllEnvsDone() && this.running) {
+        const actionForEachRuningEnv = await this.ppoTrainer.chooseAction();
         const envStates = await
           Promise.all(
             Array.from(actionForEachRuningEnv.entries(), async ([_, { envId, action}]) => {
@@ -138,11 +138,11 @@ export class WorkerOrchestrator {
           runningCount = envStates.length;
           this.updateStatusText(`Collecting train data ... ${runningCount} envs running`);
         }
-        if (this.ppoTrainer.areAllEnvsDone()) {
+        if (this.ppoTrainer.areAllEnvsDone() && this.running) {
           this.updateStatusText(`Fitting ... (could freeze UI)`);
           const curr_lr = this.trainParams.learningRate * ((this.trainParams.epochs - this.episodeNumber) / this.trainParams.epochs)
           const stats = await this.ppoTrainer.fitEnvs(curr_lr);
-          this.updateStatusText("Fitting done");
+          this.updateStatusText("Fitting done ");
           if (this.onEpisodeEnd) {
             const duration = (Date.now() - this.eStartTime) / this.ENV_COUNT
             this.onEpisodeEnd(this.ppoTrainer.ppoPong.model, this.episodeNumber, stats.meanReward, duration)
@@ -150,13 +150,14 @@ export class WorkerOrchestrator {
         }
       }
       this.episodeNumber += 1;
+      await sleep(100);
     }
     if (this.episodeNumber == this.trainParams.epochs)
       this.updateStatusText(`Training done, ${this.trainParams.epochs} epochs`);
     else
       this.updateStatusText("Training aborted");
     if (this.onEndTraining) this.onEndTraining();
-
+    this.ppoTrainer.clear();
   }
 
   stopTrain() {

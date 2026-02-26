@@ -1,11 +1,11 @@
 import { useState, type Dispatch, type ReactNode, type RefObject, type SetStateAction } from 'react'
 import { useEffect, useRef } from "react";
-import * as tf from '@tensorflow/tfjs';
 import './App.css'
 import { PongActor } from './models/PongActor';
 import { ALEConsole } from './components/ALEConsole';
 import TrainerPlan from './TrainerPlan';
 import { preprocess } from './utils';
+import * as tf from '@tensorflow/tfjs';
 
 class Stats {
   played: number = 0;
@@ -59,15 +59,15 @@ function App() {
   const [tzVisible, setTzVisible] = useState(false);
 
   useEffect(() => {
-    async function fetchModels() {
-      pongActor1Ref.current = await PongActor.fromURL("models/fs4-rp025.json")
-      setStatus1("");
-      await pongActor1Ref.current.model.save('indexeddb://temp-model');
-      const clonedModel = await tf.loadLayersModel('indexeddb://temp-model');
-      pongActor2Ref.current = new PongActor(clonedModel);
-      setStatus2("");
-    }
-    fetchModels();
+       async function fetchModels() {
+         pongActor1Ref.current = await PongActor.fromURL("models/2f-fs4-rp025.json")
+         setStatus1("");
+         await pongActor1Ref.current.model.save('indexeddb://temp-model');
+         const clonedModel = await tf.loadLayersModel('indexeddb://temp-model');
+         pongActor2Ref.current = new PongActor(clonedModel);
+         setStatus2("");
+       }
+       fetchModels();
   }, []);
 
   function chooseAction(actorRef: RefObject<PongActor | null>, screen: Uint8ClampedArray): number {
@@ -96,8 +96,8 @@ function App() {
       <p>A Pong-Playing Agent with TensorFlow Js using the Arcade Learning Environment.</p>
       <p>
         Here are two neural networks running live in the browser that have learned to play Pong autonomously using only screen input and reward signals.
-        The left agent was trained and operates in a deterministic environment, while the right agent was trained and plays with sticky actions, where the previous action is repeated with a probability of 0.25.  </p>
-
+        The left agent was trained and operates in a deterministic environment, while the right agent was trained and plays with sticky actions, where the previous action is repeated with a probability of 0.25.  
+      </p>
       <div className="container">
         <ConsoleCard infoText='deterministic'
           footer={status1}>
@@ -115,9 +115,15 @@ function App() {
 
       <div>
         <p>Training Zone <button onClick={() => setTzVisible(!tzVisible)}>(hide/show)</button></p>
-        <p>Training is quite fast, around 30 minutes to win a game on a macbook Air M1 (16g RAM)</p>
-        <p>Warning: The training process is resource-intensive and may cause temporary browser freezes.</p>
-        {tzVisible && <TrainerPlan />}
+        {tzVisible && <div>
+        <p>The AI ​​wins its first match around epoch 40 in deterministic mode,
+          and around epoch 60 with sticky actions.
+
+
+        </p>
+        <small>the training process is resource-intensive (CPU/GPU/RAM) and may cause temporary browser freezes.</small>
+         <TrainerPlan />
+        </div>}
       </div>
 
     </div>

@@ -4,9 +4,12 @@ import type { WorkerStatusPayload } from "./workers/worker";
 import { ALEConsole } from "./components/ALEConsole";
 import { PongActor } from "./models/PongActor";
 import * as tf from '@tensorflow/tfjs';
+import '@tensorflow/tfjs-core/dist/io/browser_files';
 import { ScoreChart } from "./components/ScoreChart";
 import './TrainerPlan.css';
 import { preprocess } from "./utils";
+// savehandlers are pruned by build => explicit import
+import  "@tensorflow/tfjs-core/dist/io/browser_files";
 
 const TRAIN_DB_URL = "indexeddb://train"
 const REPEAT_ACTION_PROBABILITY = 0.25
@@ -41,6 +44,11 @@ function TrainerPlan() {
             }
             return m;
         })
+    }
+
+    async function download () {
+        if (pongTrainActorRef.current)
+            await pongTrainActorRef.current.model.save('downloads://my-model')
     }
 
     function train(retrain: boolean) {
@@ -87,11 +95,11 @@ function TrainerPlan() {
     useEffect(() => {
         (async () => {
             const models = await tf.io.listModels()
-            const isAModelSaved = TRAIN_DB_URL in models;
-            setModelSaved(isAModelSaved);
+            const isAModelSaved = TRAIN_DB_URL in models;  
             if (isAModelSaved) {
                 await loadFromStorage(TRAIN_DB_URL);
             }
+            setModelSaved(isAModelSaved);
         })();
     }, [])
 
@@ -120,6 +128,11 @@ function TrainerPlan() {
                             stop training
                         </button>
                     </div>
+                    <div>
+                        <button onClick={() => download()} disabled={!modelSaved}>
+                           download
+                        </button>
+                    </div>
                     <p>
                         <input type="checkbox" disabled={workerStarted} checked={stickyAction}
                             onChange={(e) => setStickyAction(e.target.checked)}
@@ -132,11 +145,14 @@ function TrainerPlan() {
                     repeatActionProbability={stickyAction ? REPEAT_ACTION_PROBABILITY : 0} />
 
             </div>
-            <div className="card">
-                <p>Training score history </p>
-                <ScoreChart width={200} height={250} data={scores} title="(ai score) - (cpu score)" />
+            <div>
+                <div><p>{statusText}</p></div>
+                {scores.length > 0 &&
+                    <div><p>Training score history :</p>
+                        <ScoreChart width={200} height={250} data={scores} title="(ai score) - (cpu score)" />
+                    </div>
+                }
             </div>
-            <p>{statusText}</p>
         </div>
     )
 }
