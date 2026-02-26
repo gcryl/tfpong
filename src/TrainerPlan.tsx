@@ -1,11 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import MainWorker from './workers/worker?worker';
 import type { WorkerStatusPayload } from "./workers/worker";
-import { ALEConsole } from "./ALEConsole";
+import { ALEConsole } from "./components/ALEConsole";
 import { PongActor } from "./models/PongActor";
 import * as tf from '@tensorflow/tfjs';
+import '@tensorflow/tfjs-core/dist/io/browser_files';
 import { ScoreChart } from "./components/ScoreChart";
 import './TrainerPlan.css';
+import { preprocess } from "./utils";
+// savehandlers are pruned by build => explicit import
+import  "@tensorflow/tfjs-core/dist/io/browser_files";
 
 const TRAIN_DB_URL = "indexeddb://train"
 const REPEAT_ACTION_PROBABILITY = 0.25
@@ -42,6 +46,11 @@ function TrainerPlan() {
         })
     }
 
+    async function download () {
+        if (pongTrainActorRef.current)
+            await pongTrainActorRef.current.model.save('downloads://my-model')
+    }
+
     function train(retrain: boolean) {
         if (!trainWorker.current) {
             trainWorker.current = new MainWorker()
@@ -76,9 +85,9 @@ function TrainerPlan() {
         }
     }
 
-    function chooseAction(screen: Uint8Array): number {
+    function chooseAction(screen: Uint8ClampedArray): number {
         if (pongTrainActorRef.current) {
-            return pongTrainActorRef.current.predict(screen);
+            return pongTrainActorRef.current.predict(preprocess(screen));
         }
         return 0;
     }
@@ -86,11 +95,11 @@ function TrainerPlan() {
     useEffect(() => {
         (async () => {
             const models = await tf.io.listModels()
-            const isAModelSaved = TRAIN_DB_URL in models;
-            setModelSaved(isAModelSaved);
+            const isAModelSaved = TRAIN_DB_URL in models;  
             if (isAModelSaved) {
                 await loadFromStorage(TRAIN_DB_URL);
             }
+            setModelSaved(isAModelSaved);
         })();
     }, [])
 
@@ -104,32 +113,46 @@ function TrainerPlan() {
         <div className="container">
             <div className="card">
                 <div className="button-grid">
-                    <button onClick={() => train(false)} disabled={workerStarted}>
-                        {workerStarted ? "train started" : "train from scratch"}
-                    </button>
-                    <button onClick={() => train(true)} disabled={workerStarted || !modelSaved}>
-                        {workerStarted ? "retrain started" : "retrain"}
-                    </button>
-                    <button onClick={() => stopTrain()} disabled={!workerStarted}>
-                        stop training
-                    </button>
+                    <div>
+                        <button onClick={() => train(false)} disabled={workerStarted}>
+                            {workerStarted ? "train started" : "train from scratch"}
+                        </button>
+                    </div>
+                    <div>
+                        <button onClick={() => train(true)} disabled={workerStarted || !modelSaved}>
+                            {workerStarted ? "retrain started" : "retrain"}
+                        </button>
+                    </div>
+                    <div>
+                        <button onClick={() => stopTrain()} disabled={!workerStarted}>
+                            stop training
+                        </button>
+                    </div>
+                    <div>
+                        <button onClick={() => download()} disabled={!modelSaved}>
+                           download
+                        </button>
+                    </div>
+                    <p>
+                        <input type="checkbox" disabled={workerStarted} checked={stickyAction}
+                            onChange={(e) => setStickyAction(e.target.checked)}
+                        ></input>Sticky Action
+                    </p>
                 </div>
             </div>
             <div className="card">
                 <ALEConsole running={false} chooseAction={(obs) => chooseAction(obs)}
                     repeatActionProbability={stickyAction ? REPEAT_ACTION_PROBABILITY : 0} />
-                <input type="checkbox" disabled={workerStarted} checked={stickyAction}
-                    onChange={(e) => {
-                        setStickyAction(e.target.checked)
-                    }
-                    }
-                ></input>Sticky Action
+
             </div>
             <div>
-                <p>Training score history </p>
-                <ScoreChart width={200} height={250} data={scores} title="(ai score) - (cpu score)" />
+                <div><p>{statusText}</p></div>
+                {scores.length > 0 &&
+                    <div><p>Training score history :</p>
+                        <ScoreChart width={200} height={250} data={scores} title="(ai score) - (cpu score)" />
+                    </div>
+                }
             </div>
-            <p>{statusText}</p>
         </div>
     )
 }

@@ -1,11 +1,12 @@
 
 import * as tf from '@tensorflow/tfjs';
-import { diffObs, predToAction } from '../utils';
+import { predToAction } from '../utils';
+import { StackedObservations } from './tfModel';
 
 
 export class PongActor {
   model: tf.LayersModel;
-  prev?: Uint8Array;
+  stackObs?: StackedObservations;
 
   constructor(model: tf.LayersModel) {
     this.model = model
@@ -16,19 +17,18 @@ export class PongActor {
   }
 
   predict(observation: Uint8Array): number {
-    if (!this.prev)
-      this.prev = new Uint8Array(observation)
-    const observations = [diffObs(observation, this.prev)];
-
-    this.prev = new Uint8Array(observation)
+    if (!this.stackObs) {
+        this.stackObs =  new StackedObservations(observation);
+    }
+    this.stackObs.rollObservation(observation);
+    const observations = this.stackObs.sample()
     const aprob = tf.tidy(() => {
-      const x: tf.Tensor1D = tf.tensor(observations).reshape([observations.length, 80, 80, 1])
+      const x: tf.Tensor1D = tf.tensor(Array.from(observations)).reshape([1, 80, 80, 2])
       const tf_action_probs = this.model.predict(x);
       const action_probs = (tf_action_probs as tf.Tensor2D)
-      return action_probs
+      return action_probs.arraySync()[0];
     })
-    const aprobValue = aprob.arraySync()[0];
-    aprob.dispose()
+    const aprobValue = aprob;
     const [_, action] = predToAction(aprobValue)
 
     return action

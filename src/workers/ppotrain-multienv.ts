@@ -1,10 +1,10 @@
 import * as tf from '@tensorflow/tfjs';
-import { TfModel } from '../models/tfModel';
-import { diffObs, predToAction, standardizeNumberArray } from '../utils';
+import { StackedObservations, TfModel } from '../models/tfModel';
+import { predToAction, sleep, standardizeNumberArray } from '../utils';
 import type { EnvState } from './ale-worker';
 
 
-function shuffle_bs(xs: number[][], ys: number[], yprobs: number[], ep: number[]): [number[][], number[], number[], number[]] {
+function shuffle_bs(xs: Int8Array[], ys: number[], yprobs: number[], ep: number[]): [Int8Array[], number[], number[], number[]] {
   {
     const MINI_BATCH_SIZE = 1 //this.BATCH_EPISODE_SIZE;
 
@@ -79,7 +79,7 @@ function fixSizeAvoidMemoryLeak<T>(arr: T[], TRAIN_LEN = 4000): T[] {
 
 class TrainFitData {
   readonly discountedRewards: number[] = [];
-  readonly xs: number[][] = [];
+  readonly xs: Int8Array[] = [];
   readonly yprobs: number[] = [];
   readonly ys: number[] = [];
 
@@ -116,9 +116,12 @@ class TrainFitData {
   }
 }
 
+
+
 class EnvTrainData {
   readonly rewards: number[] = [];
-  readonly xs: number[][] = [];
+  //readonly xs: number[][] = [];
+  readonly xs: Int8Array[] = [];
   readonly yprobs: number[] = [];
   readonly ys: number[] = [];
 
@@ -129,37 +132,17 @@ class EnvTrainData {
     this.xs.length = 0;
   }
 
-  pushInput (obs : number[], yprob : number, ya : number) {
+  pushInput(obs: Int8Array, yprob: number, ya: number) {
     this.xs.push(obs);
     this.yprobs.push(yprob);
     this.ys.push(ya);
   }
 
-  pushReward(r : number) {
+  pushReward(r: number) {
     this.rewards.push(r);
   }
 }
 
-class StackedObservations {
-  current : Uint8Array;
-  previous : Uint8Array;
-
-  constructor (first : Uint8Array) {
-    this.current = first;
-    this.previous = first;
-  }
-
-  rollObservation (newOne : Uint8Array) {
-    this.previous = this.current;
-    this.current = newOne;
-  }
-
-  diff () {
-    return diffObs(this.current, this.previous);
-  }
-
-  static readonly EMPTY = new StackedObservations(new Uint8Array(0));
-}
 
 
 // inspiration by https://github.com/s-gv/pong-keras/blob/master/pong-ppo.py
@@ -179,9 +162,9 @@ export class PPOTrainer {
   private trainData: TrainFitData;
   private envTrainData: EnvTrainData[];
 
-  private readonly envObservations : (StackedObservations)[] =  [];
+  private readonly envObservations: (StackedObservations)[] = [];
 
-  private rewardSums: number = 0 ;
+  private rewardSums: number = 0;
   private eDones: boolean[] = [];
 
 
@@ -194,10 +177,10 @@ export class PPOTrainer {
 
     this.envTrainData = [];
     for (let i = 0; i < this.ENV_COUNT; i++) {
-       this.envObservations.push(StackedObservations.EMPTY); 
-       this.envTrainData.push(new EnvTrainData());
+      this.envObservations.push(StackedObservations.EMPTY);
+      this.envTrainData.push(new EnvTrainData());
     }
-   
+
     const eyeds: number[][] = [];
     const dim = this.ppoPong.actionCount
     for (let i = 0; i < dim; i++) {
@@ -226,15 +209,17 @@ export class PPOTrainer {
   }
 
   async fit() {
+    await sleep(1000);
     const [xs, ys, yprobs, discountedRewards]
       = shuffle_bs(this.trainData.xs, this.trainData.ys, this.trainData.yprobs, this.trainData.discountedRewards)
     for (let i = 0; i < xs.length; i += this.BATCH_SIZE) {
-      let b_xs = xs.slice(i, i + this.BATCH_SIZE);
+      // convert to number [][]
+      let b_xs = (xs.slice(i, i + this.BATCH_SIZE)).map(row => Array.from(row));
       let b_ys = ys.slice(i, i + this.BATCH_SIZE);
       let b_yprobs = yprobs.slice(i, i + this.BATCH_SIZE);
       let b_discounted_rewards = discountedRewards.slice(i, i + this.BATCH_SIZE);
       let b_advantages = standardizeNumberArray(b_discounted_rewards);
-
+      
       [b_xs, b_ys, b_yprobs, b_advantages] = this.fixSizeToAvoidMemoryLeak(b_xs, b_ys, b_yprobs, b_advantages)
 
       const b_y_true = this.compute_y_eyed(b_ys)
@@ -243,11 +228,10 @@ export class PPOTrainer {
 
         this.optimizer.minimize(() => {
           const preds = this.ppoPong.model.apply(tfX) as tf.Tensor;
-          const loss = ppoLoss(b_yprobs, b_advantages, b_y_true, preds);
-          return loss
+          return ppoLoss(b_yprobs, b_advantages, b_y_true, preds);
         })
       })
-      await Promise.resolve();  // be nice, try to limit freeze
+      await sleep(10);  // be nice, try to limit freeze
     }
   }
 
@@ -256,7 +240,7 @@ export class PPOTrainer {
   }
 
   countEnvsRunning() {
-    return this.eDones.reduce((acc, v) => v? acc: acc +=1, 0);
+    return this.eDones.reduce((acc, v) => v ? acc : acc += 1, 0);
   }
 
   startEpisode() {
@@ -267,9 +251,8 @@ export class PPOTrainer {
     };
   }
 
-
   onResetEnv(envId: number, o: Uint8Array) {
-    this.envObservations [envId] = new StackedObservations(o);
+    this.envObservations[envId] = new StackedObservations(o);
   }
 
   onStateEnv(envId: number, s: EnvState) {
@@ -289,29 +272,32 @@ export class PPOTrainer {
     this.trainData.clear();
 
     const r = this.rewardSums / this.ENV_COUNT;
-  
-    return { "meanReward": r}
+
+    return { "meanReward": r }
   }
 
-  chooseAction(): { envId: number, action: number }[] {
+  async chooseAction(): Promise<{ envId: number, action: number }[]> {
     const actionForRunningEnv: { envId: number, action: number }[] = [];
-    tf.tidy(() => {
-      const obs  = this.envObservations.map ( (o, _) => o.diff() );
-   
+    const obs = this.envObservations.map((o, _) => o.sample());
+
+    const action_probs = tf.tidy(() => {
       const tf_action_probs = this.ppoPong.forward(obs);
-      const action_probs = tf_action_probs.arraySync();
-
-      for (let index = 0; index < this.ENV_COUNT; index++) {
-        if (!this.eDones[index]) {
-          const [ya, action] = predToAction(action_probs[index])
-          const yprob = action_probs[index][ya]
-
-          this.envTrainData[index].pushInput(obs[index], yprob,ya);
-          actionForRunningEnv.push({ "envId": index, "action": action });
-        }
-      }
+      return tf_action_probs.arraySync();
     });
+    for (let index = 0; index < this.ENV_COUNT; index++) {
+      if (!this.eDones[index]) {
+        const [ya, action] = predToAction(action_probs[index])
+        const yprob = action_probs[index][ya]
+
+        this.envTrainData[index].pushInput(obs[index], yprob, ya);
+        actionForRunningEnv.push({ "envId": index, "action": action });
+      }
+    }
     return actionForRunningEnv;
   }
 
+  clear () {
+    this.trainData.clear();
+    this.envTrainData.forEach(w => w.clear());
+  }
 }
