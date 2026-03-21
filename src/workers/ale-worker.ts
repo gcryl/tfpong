@@ -58,20 +58,14 @@ export class WorkerJob {
 
     resetEpisode () : Uint8Array{
         this.aleEnv!.resetGame()
-        const o = preprocess(this.aleEnv!.getScreenGrayscale(), this.pongMode);
+        const o = preprocess(this.aleEnv!.getScreenGrayscale());
         return o;
     }
 
     playAction (action : number) : EnvState {
         const reward = this.aleEnv!.act(action);
-       // const ram = this.aleEnv!.getRAM();
-        //const cpuScore = ram[13];
-        //const aiScore = ram[14];
-       
-      //  const done = cpuScore==21 || aiScore==21
         const done = this.aleEnv!.gameOver();
-      //   console.log (cpuScore, aiScore, done, reward, action);
-        const observation = preprocess(this.aleEnv!.getScreenGrayscale(), this.pongMode)
+        const observation = preprocess(this.aleEnv!.getScreenGrayscale())
         const stepResult = {
                     observation: observation,
                     done: done,
