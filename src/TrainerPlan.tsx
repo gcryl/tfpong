@@ -222,10 +222,6 @@ function TrainerPlan() {
                         }
 
                     </div>
-                    <div>
-                        <div>a</div>
-                        <div>b</div>
-                    </div>
                 </div>
             </div>
             <div className="card">
