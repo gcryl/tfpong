@@ -9,9 +9,11 @@ type LineChartProps = {
   height: number;
   data: number[];
   title?: string;
+  domains? : number[];
+  tickValues? : number[];
 };
 
-export const ScoreChart = ({ width, height, data, title }: LineChartProps) => {
+export const ScoreChart = ({ width, height, data, title, domains=[-21,21], tickValues= [-20, -10, 0, 10, 20] }: LineChartProps) => {
   // bounds = area inside the graph axis = calculated by substracting the margins
   const axesRef = useRef(null);
   const boundsWidth = width - MARGIN.right - MARGIN.left;
@@ -21,7 +23,7 @@ export const ScoreChart = ({ width, height, data, title }: LineChartProps) => {
   const yScale = useMemo(() => {
     return d3
       .scaleLinear()
-      .domain([-21, 21])
+      .domain(domains)
       .range([boundsHeight, 0]);
   }, [data, height]);
 
@@ -44,7 +46,7 @@ export const ScoreChart = ({ width, height, data, title }: LineChartProps) => {
       .attr("transform", "translate(0," + boundsHeight + ")")
       .call(xAxisGenerator);
 
-    const yAxisGenerator = d3.axisLeft(yScale).tickValues([-20, -10, 0, 10, 20])
+    const yAxisGenerator = d3.axisLeft(yScale).tickValues(tickValues)
     svgElement.append("g").call(yAxisGenerator);
   }, [xScale, yScale, boundsHeight]);
 

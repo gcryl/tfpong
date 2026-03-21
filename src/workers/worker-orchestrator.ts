@@ -13,19 +13,25 @@ export interface OnStatusTextUpdate {
   (statusText: string): void
 }
 
-export class TrainParams {
-  readonly repeatActionProbability: number;
-  readonly epochs: number;
-  readonly romPath: string;
-  readonly learningRate: number;
+export type TrainParams = {
+  repeatActionProbability: number;
+  epochs: number;
+  romPath: string;
+  learningRate: number;
+  minLearningRate : number;
+  pongMode : boolean;
+  trainEpochInterval : number;
+};
 
-  constructor(epochs: number = 80, repeatActionProbability: number = 0, learningRate: number = 2.5e-4) {
-    this.repeatActionProbability = repeatActionProbability;
-    this.epochs = epochs;
-    this.learningRate = learningRate;
-    this.romPath = "/roms/pong.bin";
-  }
-}
+const defaultParams: TrainParams = {
+  repeatActionProbability: 0,
+  epochs: 80,
+  romPath: "",
+  learningRate: 2.5e-4,
+  minLearningRate :  1.e-7,
+  pongMode : true,
+  trainEpochInterval : 1
+};
 
 export class WorkerOrchestrator {
   readonly ENV_COUNT = 16;
@@ -34,7 +40,7 @@ export class WorkerOrchestrator {
   private running: boolean = false;
   private ppoTrainer: PPOTrainer;
   private episodeNumber: number = 0;
-  private trainParams: TrainParams = new TrainParams();
+  private trainParams: TrainParams = defaultParams;
 
   onEpisodeEnd?: OnEpisodeEnd;
   onEndTraining?: () => void;
@@ -67,7 +73,8 @@ export class WorkerOrchestrator {
           "loadROMParams": {
             romPath: this.trainParams.romPath,
             repeatActionProbability: this.trainParams.repeatActionProbability,
-            frameSkip: 4
+            frameSkip: 4,
+            pongMode : this.trainParams.pongMode
           },
           "contextRoot": this.contextRoot
         }, [romLoadedChannel.port2])
@@ -105,22 +112,23 @@ export class WorkerOrchestrator {
     });
     return Promise.all(promises);
   }
- 
+
   private updateStatusText(statusText: string) {
     if (this.onStatusTextUpdate) this.onStatusTextUpdate(statusText);
   }
 
-  async train(trainParams?: TrainParams) {
+  async train(params: Partial<TrainParams> = {}) {
+    if (params)
+      this.trainParams = { ...defaultParams, ...params }
     this.running = true;
-    if (trainParams)
-      this.trainParams = trainParams;
     await this.startEnvWorker();
-    while (this.running && this.episodeNumber < this.trainParams.epochs) {
+    this.episodeNumber = 0;
+    while (this.running && this.episodeNumber <= this.trainParams.epochs) {
       this.updateStatusText(`Collecting train data ...`);
       this.eStartTime = Date.now()
       this.ppoTrainer.startEpisode();
-      await this.postAndWaitForAllEnv((x) => { return { "envId" : x, "resetEnv": true } },
-         (envId: number, observation: Uint8Array) => this.ppoTrainer.onResetEnv(envId, observation)
+      await this.postAndWaitForAllEnv((x) => { return { "envId": x, "resetEnv": true } },
+        (envId: number, observation: Uint8Array) => this.ppoTrainer.onResetEnv(envId, observation)
       );
 
       let runningCount = this.ppoTrainer.countEnvsRunning();
@@ -128,8 +136,8 @@ export class WorkerOrchestrator {
         const actionForEachRuningEnv = await this.ppoTrainer.chooseAction();
         const envStates = await
           Promise.all(
-            Array.from(actionForEachRuningEnv.entries(), async ([_, { envId, action}]) => {
-              return this.postWaitResponse(envId, () => { return { "envId" : envId, "actionToPlay": action } },
+            Array.from(actionForEachRuningEnv.entries(), async ([_, { envId, action }]) => {
+              return this.postWaitResponse(envId, () => { return { "envId": envId, "actionToPlay": action } },
                 (x: number, state: EnvState) => { this.ppoTrainer.onStateEnv(x, state); return state });
             })
           );
@@ -138,16 +146,22 @@ export class WorkerOrchestrator {
           runningCount = envStates.length;
           this.updateStatusText(`Collecting train data ... ${runningCount} envs running`);
         }
+
         if (this.ppoTrainer.areAllEnvsDone() && this.running) {
-          this.updateStatusText(`Fitting ... (could freeze UI)`);
-          const curr_lr = this.trainParams.learningRate * ((this.trainParams.epochs - this.episodeNumber) / this.trainParams.epochs)
-          const stats = await this.ppoTrainer.fitEnvs(curr_lr);
-          this.updateStatusText("Fitting done ");
           if (this.onEpisodeEnd) {
             const duration = (Date.now() - this.eStartTime) / this.ENV_COUNT
-            this.onEpisodeEnd(this.ppoTrainer.ppoPong.model, this.episodeNumber, stats.meanReward, duration)
+            this.onEpisodeEnd(this.ppoTrainer.brain.model, this.episodeNumber,
+              this.ppoTrainer.meanReward(), duration)
+          }
+          if ((this.episodeNumber % this.trainParams.trainEpochInterval) == 0) {
+            this.updateStatusText(`Fitting ... (could freeze UI)`);
+            let curr_lr = this.trainParams.learningRate * ((this.trainParams.epochs - this.episodeNumber) / this.trainParams.epochs)
+            curr_lr = Math.max(curr_lr, this.trainParams.minLearningRate)
+            await this.ppoTrainer.fitEnvs(curr_lr);
+            this.updateStatusText("Fitting done ");
           }
         }
+
       }
       this.episodeNumber += 1;
       await sleep(100);

@@ -1,7 +1,8 @@
 import * as tf from '@tensorflow/tfjs';
 import { StackedObservations, TfModel } from '../models/tfModel';
-import { predToAction, sleep, standardizeNumberArray } from '../utils';
+import { sleep, standardizeNumberArray } from '../utils';
 import type { EnvState } from './ale-worker';
+import { predToAction } from '../models/actor';
 
 
 function shuffle_bs(xs: Int8Array[], ys: number[], yprobs: number[], ep: number[]): [Int8Array[], number[], number[], number[]] {
@@ -96,12 +97,16 @@ class TrainFitData {
     this.ys.length = 0;
   }
 
-  private rewardToDiscountRewards(episodeRewards: number[] = []) {
+  private rewardToDiscountRewards(episodeRewards: number[] = [], clip : boolean = true) {
     const discounted: number[] = new Array(episodeRewards.length).fill(0);
-    let running_add = 0;
+    let running_add = -1;
     for (let t = episodeRewards.length - 1; t >= 0; t--) {
-      if (episodeRewards[t] !== 0) running_add = 0;
-      running_add = running_add * this.gamma + episodeRewards[t];
+      let episodeReward = episodeRewards[t];
+      if (clip) {
+        episodeReward = Math.max(-1, Math.min(1, episodeReward))
+      }
+    //  if (episodeReward== 0) running_add = 0;
+      running_add = running_add * this.gamma + episodeReward;
       discounted[t] = running_add;
     }
     return discounted
@@ -120,7 +125,6 @@ class TrainFitData {
 
 class EnvTrainData {
   readonly rewards: number[] = [];
-  //readonly xs: number[][] = [];
   readonly xs: Int8Array[] = [];
   readonly yprobs: number[] = [];
   readonly ys: number[] = [];
@@ -152,7 +156,7 @@ export class PPOTrainer {
   private readonly BATCH_EPISODE_SIZE = 8;
   private readonly BATCH_SIZE = this.BATCH_EPISODE_SIZE * this.ENV_COUNT;
 
-  readonly ppoPong: TfModel;
+  readonly brain: TfModel;
 
   private optimizer: AdamWithSchedule;
   private sampleShape: number[];
@@ -166,12 +170,18 @@ export class PPOTrainer {
 
   private rewardSums: number = 0;
   private eDones: boolean[] = [];
+  private predToAction: (action_probs: number[]) => [number, number]
 
 
-  constructor(learningRate: number) {
-    this.ppoPong = new TfModel();
+  constructor(learningRate: number, pong : boolean) {
+    if (pong) {
+      this.brain = new TfModel(2);
+    } else {
+      this.brain = new TfModel(3);
+    }
+    this.predToAction = predToAction;
     this.optimizer = new AdamWithSchedule(learningRate, 0.9, 0.999, undefined);
-    this.sampleShape = this.ppoPong.sampleShape;
+    this.sampleShape = this.brain.sampleShape;
 
     this.trainData = new TrainFitData(this.gamma);
 
@@ -182,7 +192,7 @@ export class PPOTrainer {
     }
 
     const eyeds: number[][] = [];
-    const dim = this.ppoPong.actionCount
+    const dim = this.brain.actionCount
     for (let i = 0; i < dim; i++) {
       const length = dim
       const eyed = Array.from(
@@ -227,7 +237,7 @@ export class PPOTrainer {
         const tfX = tf.tensor(b_xs).reshape([-1, ... this.sampleShape])
 
         this.optimizer.minimize(() => {
-          const preds = this.ppoPong.model.apply(tfX) as tf.Tensor;
+          const preds = this.brain.model.apply(tfX) as tf.Tensor;
           return ppoLoss(b_yprobs, b_advantages, b_y_true, preds);
         })
       })
@@ -270,10 +280,6 @@ export class PPOTrainer {
     this.optimizer.setLearningRate(currLR)
     await this.fit();
     this.trainData.clear();
-
-    const r = this.rewardSums / this.ENV_COUNT;
-
-    return { "meanReward": r }
   }
 
   async chooseAction(): Promise<{ envId: number, action: number }[]> {
@@ -281,12 +287,12 @@ export class PPOTrainer {
     const obs = this.envObservations.map((o, _) => o.sample());
 
     const action_probs = tf.tidy(() => {
-      const tf_action_probs = this.ppoPong.forward(obs);
+      const tf_action_probs = this.brain.forward(obs);
       return tf_action_probs.arraySync();
     });
     for (let index = 0; index < this.ENV_COUNT; index++) {
       if (!this.eDones[index]) {
-        const [ya, action] = predToAction(action_probs[index])
+        const [ya, action] = this.predToAction(action_probs[index])
         const yprob = action_probs[index][ya]
 
         this.envTrainData[index].pushInput(obs[index], yprob, ya);
@@ -299,5 +305,9 @@ export class PPOTrainer {
   clear () {
     this.trainData.clear();
     this.envTrainData.forEach(w => w.clear());
+  }
+
+  meanReward () {
+    return this.rewardSums / this.ENV_COUNT;
   }
 }

@@ -1,11 +1,10 @@
 import { useState, type Dispatch, type ReactNode, type RefObject, type SetStateAction } from 'react'
 import { useEffect, useRef } from "react";
 import './App.css'
-import { PongActor } from './models/PongActor';
+import { Actor } from './models/actor';
 import { ALEConsole } from './components/ALEConsole';
 import TrainerPlan from './TrainerPlan';
 import { preprocess } from './utils';
-import * as tf from '@tensorflow/tfjs';
 
 class Stats {
   played: number = 0;
@@ -47,30 +46,30 @@ function ConsoleCard({ infoText, smallInfo = "", footer = "", children }: Consol
 }
 
 function App() {
-  const pongActor1Ref = useRef<PongActor>(null);
-  const pongActor2Ref = useRef<PongActor>(null);
+  const pongActor1Ref = useRef<Actor>(null);
+  const pongActor3Ref = useRef<Actor>(null);
+  const [stickyAction, setStickyAction] = useState(false);
 
   const [status1, setStatus1] = useState("loading model");
-  const [status2, setStatus2] = useState("loading model");
+
+  const [status3, setStatus3] = useState("loading model");
+  // const [obs, setObs] = useState<Uint8Array>(new Uint8Array(80*80));
 
   const statsRef1 = useRef(new Stats());
-  const statsRef2 = useRef(new Stats());
 
   const [tzVisible, setTzVisible] = useState(false);
 
   useEffect(() => {
-       async function fetchModels() {
-         pongActor1Ref.current = await PongActor.fromURL("models/2f-fs4-rp025.json")
-         setStatus1("");
-         await pongActor1Ref.current.model.save('indexeddb://temp-model');
-         const clonedModel = await tf.loadLayersModel('indexeddb://temp-model');
-         pongActor2Ref.current = new PongActor(clonedModel);
-         setStatus2("");
-       }
-       fetchModels();
+    async function fetchModels() {
+      pongActor1Ref.current = await Actor.fromURL("models/2f-fs4-rp025.json")
+      setStatus1("AI on right side");
+      pongActor3Ref.current = await Actor.fromURL("models/breakout-2f-fs4-rp0.json")
+      setStatus3("");
+    }
+    fetchModels();
   }, []);
 
-  function chooseAction(actorRef: RefObject<PongActor | null>, screen: Uint8ClampedArray): number {
+  function chooseAction(actorRef: RefObject<Actor | null>, screen: Uint8ClampedArray): number {
     if (actorRef.current) {
       return actorRef.current.predict(preprocess(screen));
     }
@@ -92,37 +91,44 @@ function App() {
 
   return (
     <div>
-      <h1>AI Pong</h1>
-      <p>A Pong-Playing Agent with TensorFlow Js using the Arcade Learning Environment.</p>
+      <h1>AI Pong & Breakout</h1>
+      <p>An Atari Playing Agent with TensorFlow Js using the Arcade Learning Environment.</p>
       <p>
-        Here are two neural networks running live in the browser that have learned to play Pong autonomously using only screen input and reward signals.
-        The left agent was trained and operates in a deterministic environment, while the right agent was trained and plays with sticky actions, where the previous action is repeated with a probability of 0.25.  
+        Here are two neural networks running live in the browser that have learned to play autonomously using only screen input and reward signals.
       </p>
       <div className="container">
-        <ConsoleCard infoText='deterministic'
+        <ConsoleCard infoText='Breakout'
+          footer={status3}>
+          <ALEConsole chooseAction={(x) => chooseAction(pongActor3Ref, x)}
+            romPath='roms/breakout.bin'
+            repeatActionProbability={stickyAction ? 0.25 : 0}  breakoutMode= {true}/>
+        </ConsoleCard> 
+        <ConsoleCard infoText='Pong'
           footer={status1}>
           <ALEConsole chooseAction={(obs) => chooseAction(pongActor1Ref, obs)}
-            onEndOfGame={(c, a) => { updateStats(statsRef1, setStatus1, c, a) }} />
+            repeatActionProbability={stickyAction ? 0.25 : 0} breakoutMode={false}
+            onEndOfGame={(c, a) => { updateStats(statsRef1, setStatus1, c, a) }} running={false} />
         </ConsoleCard>
-        <ConsoleCard infoText='stochastic' smallInfo='(sticky action)'
-          footer={status2}>
-          <ALEConsole chooseAction={(obs) => chooseAction(pongActor2Ref, obs)}
-            onEndOfGame={(c, a) => { updateStats(statsRef2, setStatus2, c, a) }}
-            repeatActionProbability={0.25} />
-        </ConsoleCard>
-      </div>
-      <div><p><small>click on console canvas to pause/start game</small></p></div>
 
+      </div>
+      <div>
+
+        <p><small>click on console canvas to pause/start game</small></p></div>
+      <p><small>
+        <input type="checkbox" checked={stickyAction}
+          onChange={(e) => setStickyAction(e.target.checked)}
+        ></input>sticky Action (harder)
+      </small>
+      </p>
       <div>
         <p>Training Zone <button onClick={() => setTzVisible(!tzVisible)}>(hide/show)</button></p>
         {tzVisible && <div>
-        <p>The AI ​​wins its first match around epoch 40 in deterministic mode,
-          and around epoch 60 with sticky actions.
-
-
-        </p>
-        <small>the training process is resource-intensive (CPU/GPU/RAM) and may cause temporary browser freezes.</small>
-         <TrainerPlan />
+          <p>For Pong, AI ​​wins its first match around epoch 40 in deterministic mode,
+            and around epoch 60 with sticky actions.
+            Breakout need more epochs to have a good score.
+          </p>
+          <small>The training process is resource-intensive (CPU/GPU/RAM) and may cause temporary browser freezes and crash.</small>
+          <TrainerPlan />
         </div>}
       </div>
 
@@ -131,3 +137,4 @@ function App() {
 }
 
 export default App
+

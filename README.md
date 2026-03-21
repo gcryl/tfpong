@@ -1,11 +1,12 @@
-# AI Pong Agent with TensorFlow.js using The Arcade Learning Environment 
-Play against an AI-powered Pong agent directly in your browser.
+# Atari AI Agent with TensorFlow.js using The Arcade Learning Environment 
+Play against an AI-powered Pong & Breakout agent directly in your browser.
 
 Machine Learning powered by TensorFlow.js
 
 Atari 2600 emulation via WebAssembly using the Arcade Learning Environment (ALE)
 
-This application trains a Convolutional Neural Network (CNN) in-browser to learn how to play Pong autonomously. On a MacBook Air M1 (16GB RAM) with google chrome, the agent typically learns to outperform the built-in atari opponent in under 1 hour.
+This application trains a Convolutional Neural Network (CNN) in-browser to learn how to play Pong autonomously.
+On a MacBook Air M1 (16GB RAM) with Google chrome, the agent typically learns to outperform the built-in atari opponent in under 1 hour for Pong.
 
 The training algorithm is Proximal Policy Optimization (PPO).
 
@@ -15,9 +16,13 @@ The training algorithm is Proximal Policy Optimization (PPO).
 The model input is the pixel-wise difference between the two most recent frames, allowing the agent to capture motion information.
 
 Each frame is:
-- Converted to binary black-and-white (0/1)
+- Converted to gray (0/255)
 - Cropped to remove score headers and footers
 - Resized to 80 × 80
+
+## Action Space
+
+Action space is reduced to two actions : up/down for Pong and left/right for Breakout.
 
 ## Network Architecture
 
@@ -35,6 +40,17 @@ Conv2D (32 filters, 8×8 kernel, stride 4, ReLU)
 # Python PPO 
 
 The PPO code is a adaptation of this [python version](https://github.com/s-gv/pong-keras/blob/master/pong-ppo.py)). 
+
+# Changes between Pong & Breakout training
+
+For Pong, each episode is a full game and ends when a player hits 21 points,
+For Breakout, an episode ends when a live is lost, and train code emit a fire action after each lives lost to continue the game.
+Fitting occurs at each game end, so each episode for Pong and each 5 episodes for Breakout.
+
+| Parameter     | Pong    | Breakout |
+|:--------------|--------:|---------:|
+| learning rate | 2.5e-4  | 2.5e-3   |
+| epochs        | 100     | 3000     |
 
 # Performance Considerations
 
