@@ -1,15 +1,51 @@
 import * as tf from '@tensorflow/tfjs';
 import '@tensorflow/tfjs-backend-webgpu';
 import { PPOTrainer } from './ppotrain-multienv';
-import { TrainParams, WorkerOrchestrator, type OnEpisodeEnd } from './worker-orchestrator';
+import { type TrainParams, WorkerOrchestrator, type OnEpisodeEnd } from './worker-orchestrator';
 
-export interface TrainArgsPayload {
+export interface TrainArgsPayloadz {
   epochs: number
   modelPath: string,
   retrain?: boolean,
   repeatActionProbability?: number,
-  stopTrain?: boolean
+  stopTrain?: boolean,
+  actionCount?: number
 }
+
+const MSG_TRAIN_TYPE = 0;
+const MSG_STOP_TYPE = 1;
+
+type TrainArgs = {
+  type: number, modelPath: string, actionCount: number,  retrain?: boolean, 
+  params: TrainParams
+};
+
+type StopArgs = { type: number, stopTrain: boolean };
+
+export type TrainArgsPayload =
+  | TrainArgs
+  | StopArgs;
+
+export const stopTrainMsg: TrainArgsPayload = { type: MSG_STOP_TYPE, stopTrain: true };
+
+export function trainMsg(epochs: number, actionCount: number, modelPath: string, romPath: string,
+  pongMode : boolean, learningRate:number, trainEpochInterval : number, retrain?: boolean, 
+  repeatActionProbability: number = 0): TrainArgsPayload {
+  return {
+    type: MSG_TRAIN_TYPE,
+    params: { epochs, repeatActionProbability, romPath, learningRate,minLearningRate : 1e-7, pongMode, trainEpochInterval},
+    actionCount, modelPath, retrain
+  };
+}
+
+export interface StopTrainArgsPayload {
+  stopTrain: boolean,
+}
+
+export interface StopTrainArgsPayload {
+  stopTrain: boolean,
+}
+
 
 export interface WorkerStatusPayload {
   episodeStats?: {
@@ -19,41 +55,37 @@ export interface WorkerStatusPayload {
   }
   modelSavePath?: string,
   trainingDone?: boolean,
-  statusText? : string
+  statusText?: string
 }
 
-
-
 let ppoTrainer: PPOTrainer;
-let workerOrchestrator : WorkerOrchestrator;
+let workerOrchestrator: WorkerOrchestrator;
 
 onmessage = function (event: MessageEvent<TrainArgsPayload>) {
   const contextRoot = import.meta.env.BASE_URL;
-
-  if (event.data.stopTrain) {
+  if (event.data.type == MSG_STOP_TYPE) {
     if (workerOrchestrator)
       workerOrchestrator.stopTrain();
-  } else {
+  } else if (event.data.type == MSG_TRAIN_TYPE) {
     tf.enableProdMode();
     tf.ready().then(() => {
-      train(event.data, contextRoot);
+      train(event.data as TrainArgs, contextRoot);
     })
   }
 
 };
 
-async function train(params: TrainArgsPayload, contextRoot : string) {
-  const TRAIN_PARAMS= new TrainParams(params.epochs,  params.repeatActionProbability)
-     
+async function train(args: TrainArgs, contextRoot: string) {
+
   if (ppoTrainer == null) {
-     ppoTrainer = new PPOTrainer(TRAIN_PARAMS.learningRate);
-     workerOrchestrator = new WorkerOrchestrator(ppoTrainer, contextRoot);
+    ppoTrainer = new PPOTrainer(args.params.learningRate, args.params.pongMode);
+    workerOrchestrator = new WorkerOrchestrator(ppoTrainer, contextRoot);
   }
-    
+
   const skipUpdateModel = 5;
-  if (params.modelPath && params.retrain) {
-    const model = await tf.loadLayersModel(params.modelPath);
-    ppoTrainer.ppoPong.setModel(model);
+  if (args.modelPath && args.retrain) {
+    const model = await tf.loadLayersModel(args.modelPath);
+    ppoTrainer.brain.setModel(model);
   }
 
   const updateStatus: OnEpisodeEnd = async (model, episodeNumber, reward_sum, elapsedTimeInMs) => {
@@ -62,22 +94,21 @@ async function train(params: TrainArgsPayload, contextRoot : string) {
       "score": reward_sum,
       "elapsedTimeInMs": elapsedTimeInMs
     };
-    const toSave = (episodeNumber) % skipUpdateModel == 0;
+    const toSave = (episodeNumber % skipUpdateModel == 0) || (episodeNumber == args.params.epochs-1) ;
 
     if (toSave) {
-      await model.save(params.modelPath)
+      await model.save(args.modelPath)
     }
     const m: WorkerStatusPayload = {
       episodeStats: stats,
-      modelSavePath: toSave ? params.modelPath : undefined
+      modelSavePath: toSave ? args.modelPath : undefined
     }
     postMessage(m)
   };
   workerOrchestrator.onEpisodeEnd = updateStatus;
-  workerOrchestrator.onEndTraining = () => { postMessage({"trainingDone" : true}) };
-  workerOrchestrator.onStatusTextUpdate = (statusText) => { postMessage({"statusText" : statusText}) };
-
-  workerOrchestrator.train(TRAIN_PARAMS);
+  workerOrchestrator.onEndTraining = () => { postMessage({ "trainingDone": true }) };
+  workerOrchestrator.onStatusTextUpdate = (statusText) => { postMessage({ "statusText": statusText }) };
+  workerOrchestrator.train(args.params);
 }
 
 

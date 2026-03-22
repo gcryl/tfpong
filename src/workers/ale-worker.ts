@@ -1,4 +1,5 @@
-import createALEModule, { type ALEInterface } from '../../public/ale';
+
+import { ALEEnv } from "../models/ale-env"
 import { preprocess } from "../utils"
 
 export interface EnvState {
@@ -18,6 +19,7 @@ export interface ALEOrder {
     actionToPlay? : number
     loadROMParams? : LoadRomParams
     contextRoot?  : string
+    pongMode? : boolean;
 }
 export interface LoadRomParams {
     romPath : string
@@ -31,30 +33,27 @@ export interface OnReset {
 
 export class WorkerJob {
 
-    private aleEnv? : ALEInterface;
+    private aleEnv? : ALEEnv;
     private envId : number;
     private contextRoot : string;
+    private pongMode : boolean;
     
-    constructor (envId : number, contextRoot : string) {
+    constructor (envId : number, contextRoot : string, pongMode : boolean) {
          this.envId = envId;
          this.contextRoot = contextRoot;
+         this.pongMode = pongMode;
     }
     
     async loadROM (romPath="/roms/pong.bin",frameSkip = 4, repeatActionProbability=0.){
-        const contextRoot = this.contextRoot;
-        // without override, download failed  (relative url to woker)
-        function locateFile(path :any, prefix : any) {
-            if (path.endsWith(".data") || path.endsWith(".wasm")) return  contextRoot+ path
-            return prefix + path
-        }
-        const ALE = await createALEModule({'locateFile' : locateFile});
-        const ale = new ALE.ALEInterface();
-       
-        this.aleEnv = ale;
-        ale.setInt("frame_skip", frameSkip);
-        ale.setFloat("repeat_action_probability", repeatActionProbability);
-        ale.setInt ("random_seed", this.envId)
-        ale.loadROM(romPath)
+        if (this.pongMode) 
+             this.aleEnv = await ALEEnv.createPong(this.contextRoot);
+        else 
+             this.aleEnv = await ALEEnv.createBreakOut(this.contextRoot);
+    
+        this.aleEnv.setFrameSkip(frameSkip);
+        this.aleEnv.setRepeatActionProbability(repeatActionProbability);
+        this.aleEnv.setRandomSeed(this.envId);
+        this.aleEnv.loadROM(romPath);
     }
 
     resetEpisode () : Uint8Array{
@@ -65,10 +64,7 @@ export class WorkerJob {
 
     playAction (action : number) : EnvState {
         const reward = this.aleEnv!.act(action);
-        const ram = this.aleEnv!.getRAM();
-        const cpuScore = ram[13];
-        const aiScore = ram[14];
-        const done = cpuScore==21 || aiScore==21
+        const done = this.aleEnv!.gameOver();
         const observation = preprocess(this.aleEnv!.getScreenGrayscale())
         const stepResult = {
                     observation: observation,
@@ -83,7 +79,6 @@ let job : WorkerJob ;
 interface Answer {
   envId: number;
   payload? :  boolean | EnvState| Uint8Array;
-  
 }
 
 onmessage = async function (event : MessageEvent<ALEOrder>) {
@@ -91,7 +86,7 @@ onmessage = async function (event : MessageEvent<ALEOrder>) {
     let observation : Uint8Array|undefined = undefined;
     
     if (event.data.loadROM) {
-        job = new WorkerJob(event.data.envId, event.data.contextRoot!);
+        job = new WorkerJob(event.data.envId, event.data.contextRoot!, event.data.pongMode!);
         if (event.data.loadROMParams)
             await job.loadROM(event.data.loadROMParams.romPath, 
                     event.data.loadROMParams.frameSkip,

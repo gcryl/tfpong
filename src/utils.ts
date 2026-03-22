@@ -6,16 +6,6 @@ export async function sleep(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-export function predToAction(action_probs: number[]): [number, number] {
-  const yprob = randomChoice(action_probs)
-  let action = 3 // RIGHT
-  if (yprob == 1)
-    action = 4 // LEFT
-  else if (yprob == 2)
-    action = 0 // NOOP
-  return [yprob, action];
-}
-
 export function standardizeNumberArray(arr: number[]) {
   const mean = arr.reduce((sum, val) => sum + val, 0) / arr.length;
   const stdDev = Math.sqrt(arr.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / arr.length);
@@ -67,10 +57,6 @@ export function preprocess(screen: Uint8ClampedArray): Uint8Array {
     obs_index = IMG_SIZE * lineIndex / FACTOR
     for (let index = 0; index < IMG_SIZE * FACTOR; index += FACTOR) {
       let element = screenC[(lineIndex + shift_line) * 160 + index];
-      if (element == 87)
-        element = 0
-      else
-        element = 1
       preprocessed[obs_index] = element;
       obs_index += 1
     }

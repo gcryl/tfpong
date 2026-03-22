@@ -28,9 +28,12 @@ export class StackedObservations {
 }
 
 export class TfModel {
-  model: tf.LayersModel
+  model: tf.LayersModel;
 
-  constructor() {
+  readonly actionCount;
+
+  constructor(actionCount : number) {
+    this.actionCount = actionCount;
     const model: tf.Sequential = tf.sequential()
     this.model = model
     // C 32 8 4
@@ -91,6 +94,5 @@ export class TfModel {
   }
 
   readonly sampleShape = [80, 80, 2]
-  readonly actionCount = 2
 }
 
