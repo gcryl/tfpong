@@ -14,7 +14,7 @@ import "@tensorflow/tfjs-core/dist/io/browser_files";
 const TRAIN_DB_URL_BREAKOUT = "indexeddb://train-breakout"
 const TRAIN_DB_URL_PONG = "indexeddb://train-pong"
 const REPEAT_ACTION_PROBABILITY = 0.25
-const ACTION_COUNT = 2
+const ACTION_COUNT = 3
 const BREAKOUT_EPISODE_EPOCH = 5
 const PONG_EPISODE_EPOCH = 5
 
@@ -241,7 +241,7 @@ function TrainerPlan() {
                         }
                         {!pongMode &&
                             <ScoreChart width={200} height={250} data={scores} title="ai score)"
-                                domains={[0, Math.max(...scores) + 10]} tickValues={[0, 25, 50, 100, 150, 200, 250, 300, 350, 400, 500]} />
+                                domains={[0, Math.max(...scores) + 10]} tickValues={[0, 5, 10, 25, 50, 100, 150, 200, 250, 300, 350, 400, 500]} />
                         }
                     </div>
                 }
